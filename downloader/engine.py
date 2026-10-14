@@ -19,7 +19,7 @@ from core.config import COOKIES_FILE
 from core.models import MediaInfo, DownloadResult
 from core.detector import PlatformDetector
 from core.sanitizer import Sanitizer
-from core.logger import AppLogger
+from core.logger import AppLogger, YtDlpLogger
 from downloader.options import YdlOptionsBuilder
 from downloader.disk import SmartDiskChecker
 from utils.notify import NotificationManager
