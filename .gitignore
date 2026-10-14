@@ -4,3 +4,7 @@ __pycache__/
 downloads/
 ffmpeg/
 *.zip
+*.tar.xz
+*.tar.gz
+*.tar
+*.log

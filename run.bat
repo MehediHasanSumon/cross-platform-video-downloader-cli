@@ -1,9 +1,11 @@
 @echo off
+:: Enforce UTF-8 Code Page for clean Unicode, Bengali, and Rich TUI output on Windows
+chcp 65001 >nul
 setlocal EnableDelayedExpansion
-title YouTube Downloader Setup & Runner
+title Universal Media Downloader Pro
 
 echo ===================================================
-echo     YouTube Downloader (Automated Launcher)
+echo   Universal Media Downloader Pro (Windows Launcher)
 echo ===================================================
 echo.
 
@@ -53,16 +55,16 @@ if exist "venv\Scripts\activate.bat" (
     exit /b 1
 )
 
-:: 4. Condition: Check if yt-dlp is installed, install dependencies if needed
+:: 4. Condition: Check if yt-dlp and rich are installed, install dependencies if needed
 echo.
 echo [4/5] Checking dependencies...
-python -c "import yt_dlp" >nul 2>nul
+python -c "import yt_dlp, rich" >nul 2>nul
 if %errorlevel% neq 0 (
     echo [INFO] Required packages not found. Installing...
     if exist "requirements.txt" (
         pip install -r requirements.txt
     ) else (
-        pip install -U yt-dlp
+        pip install -U yt-dlp rich
     )
     if !errorlevel! neq 0 (
         echo [ERROR] Failed to install dependencies. Check your internet connection.
@@ -108,10 +110,13 @@ echo.
 echo ===================================================
 echo                Starting Downloader
 echo ===================================================
-echo.
+
+:: Brief pause so user sees all checks passed, then clear screen for clean UI
+timeout /t 1 /nobreak >nul
+cls
 
 if exist "main.py" (
-    python main.py
+    python main.py %*
 ) else (
     echo [ERROR] 'main.py' file not found in current folder!
 )
