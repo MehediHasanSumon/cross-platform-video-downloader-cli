@@ -1,9 +1,11 @@
 @echo off
+:: Enforce UTF-8 Code Page for clean Unicode, Bengali, and Rich TUI output on Windows
+chcp 65001 >nul
 setlocal EnableDelayedExpansion
-title YouTube Downloader Setup & Runner
+title Universal Media Downloader Pro
 
 echo ===================================================
-echo     YouTube Downloader (Automated Launcher)
+echo   Universal Media Downloader Pro (Windows Launcher)
 echo ===================================================
 echo.
 
@@ -62,7 +64,7 @@ if %errorlevel% neq 0 (
     if exist "requirements.txt" (
         pip install -r requirements.txt
     ) else (
-        pip install -U yt-dlp
+        pip install -U yt-dlp rich
     )
     if !errorlevel! neq 0 (
         echo [ERROR] Failed to install dependencies. Check your internet connection.
@@ -114,7 +116,7 @@ timeout /t 1 /nobreak >nul
 cls
 
 if exist "main.py" (
-    python main.py
+    python main.py %*
 ) else (
     echo [ERROR] 'main.py' file not found in current folder!
 )

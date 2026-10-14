@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
 ====================================================================
- YouTube & Media Downloader Pro
+ Universal Media Downloader Pro (YouTube, Facebook & Social TUI)
  Next-Level Terminal TUI (Terminal User Interface)
  - Powered by yt-dlp and Rich
+ - Multi-Platform Auto-Detection (YouTube, Facebook, Instagram, TikTok, X)
  - Interactive Arrow-Key & Direct Number Navigation (↑/↓, 1-5, Enter)
  - Instant Media Inspection & Metadata Preview Card
- - Multi-Stream 8K/4K/1440p/1080p60 + FFmpeg Lossless Merging
+ - Smart Title Extraction & Clean Filename Sanitization
+ - Lossless Video + Audio Merging via FFmpeg
  - Real-Time Rich Progress Engine (Speed, ETA, Downloaded/Total, Bar)
  - Dual-Bar Playlist Tracking & Smart Disk Auto-Resume
+ - Optional Browser / Local Cookies Support for Private Media
 ====================================================================
 """
 
@@ -20,6 +23,9 @@ import urllib.parse
 import subprocess
 import ctypes
 import logging
+import atexit
+import signal
+from logging.handlers import RotatingFileHandler
 from typing import Optional, Dict, Any, List, Tuple
 
 # Enable UTF-8 and ANSI colors / Virtual Terminal Processing on Windows
@@ -38,6 +44,35 @@ if sys.platform == "win32":
             kernel32.SetConsoleMode(h_stdout, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
     except Exception:
         pass
+
+# Safe cross-platform terminal cleanup hook
+def cleanup_terminal():
+    """Guarantees cursor restoration and clean terminal buffer across Linux, macOS, and Windows."""
+    try:
+        sys.stdout.write("\033[?25h")  # Ensure cursor is visible
+        sys.stdout.flush()
+    except Exception:
+        pass
+    if sys.platform != "win32":
+        try:
+            import termios
+            if sys.stdin.isatty():
+                termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+        except Exception:
+            pass
+
+atexit.register(cleanup_terminal)
+
+def _sigint_handler(sig, frame):
+    cleanup_terminal()
+    sys.exit(0)
+
+try:
+    signal.signal(signal.SIGINT, _sigint_handler)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, _sigint_handler)
+except Exception:
+    pass
 
 # Ensure local ./ffmpeg/bin is added to PATH if present
 _LOCAL_FFMPEG_BIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg", "bin")
@@ -81,15 +116,20 @@ except ImportError:
 
 console = Console(highlight=False)
 
-# Configure Application Logging
+# Configure Production Application Logging with Rotation (3MB per file, 3 backups)
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "youtube_downloader.log")
 
 def setup_logger() -> logging.Logger:
-    """Initializes dedicated file logger with UTF-8 support."""
-    logger = logging.getLogger("youtube_downloader")
+    """Initializes dedicated rotating file logger with UTF-8 support."""
+    logger = logging.getLogger("media_downloader")
     logger.setLevel(logging.DEBUG)
     if not logger.handlers:
-        handler = logging.FileHandler(LOG_FILE, mode="a", encoding="utf-8")
+        handler = RotatingFileHandler(
+            LOG_FILE,
+            maxBytes=3 * 1024 * 1024,
+            backupCount=3,
+            encoding="utf-8",
+        )
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
             "[%(asctime)s] [%(levelname)s] %(message)s",
@@ -202,7 +242,7 @@ def read_key() -> str:
 #  Format Configurations & Quality Profiles
 # ====================================================================
 
-FORMAT_PROFILES = [
+YOUTUBE_FORMAT_PROFILES = [
     {
         "id": 0,
         "name": "Maximum Quality Video",
@@ -250,35 +290,113 @@ FORMAT_PROFILES = [
     },
 ]
 
+SOCIAL_FORMAT_PROFILES = [
+    {
+        "id": 0,
+        "name": "Best Available Video (HD)",
+        "badge": "HD / 1080p / Max",
+        "desc": "Highest available resolution with best audio merged into MP4",
+        "ext": "mp4",
+        "tag": "BEST HD",
+        "tag_color": "bright_cyan",
+    },
+    {
+        "id": 1,
+        "name": "High Definition (1080p / 720p)",
+        "badge": "HD Crisp",
+        "desc": "High-definition MP4 stream for fast download & crisp playback",
+        "ext": "mp4",
+        "tag": "HD MP4",
+        "tag_color": "bright_green",
+    },
+    {
+        "id": 2,
+        "name": "Standard Definition (SD / 480p)",
+        "badge": "SD 480p Compact",
+        "desc": "Standard definition MP4, lightweight and great for sharing",
+        "ext": "mp4",
+        "tag": "SD COMPACT",
+        "tag_color": "yellow",
+    },
+    {
+        "id": 3,
+        "name": "High-Fidelity Audio (MP3)",
+        "badge": "320 kbps MP3",
+        "desc": "Extract studio-quality 320kbps MP3 audio soundtrack",
+        "ext": "mp3",
+        "tag": "AUDIO MP3",
+        "tag_color": "bright_magenta",
+    },
+    {
+        "id": 4,
+        "name": "Original Audio (M4A / AAC)",
+        "badge": "Source Audio",
+        "desc": "Untouched original audio stream directly from media",
+        "ext": "m4a",
+        "tag": "RAW AUDIO",
+        "tag_color": "cyan",
+    },
+]
+
+# Default profile set for backward compatibility
+FORMAT_PROFILES = YOUTUBE_FORMAT_PROFILES
+
+
+def get_format_profiles(platform_key: str) -> List[Dict[str, Any]]:
+    """Returns platform-tailored format profiles."""
+    if platform_key in ("facebook", "instagram", "tiktok", "twitter"):
+        return SOCIAL_FORMAT_PROFILES
+    return YOUTUBE_FORMAT_PROFILES
+
 
 # ====================================================================
 #  Helper Utilities
 # ====================================================================
 
-def format_duration(seconds: Optional[int]) -> str:
-    """Formats seconds into human-readable duration (e.g. 03:45 or 1h 24m 10s)."""
-    if not seconds or seconds < 0:
+def format_duration(seconds: Any) -> str:
+    """Formats seconds into human-readable duration (e.g. 03:45 or 1h 24m 10s). Safely handles floats and strings."""
+    if not seconds:
         return "Unknown"
-    hours = seconds // 3600
-    minutes = (seconds % 3600) // 60
-    secs = seconds % 60
+    try:
+        total_sec = int(round(float(seconds)))
+    except (ValueError, TypeError):
+        return "Unknown"
+
+    if total_sec <= 0:
+        return "Unknown"
+
+    hours = total_sec // 3600
+    minutes = (total_sec % 3600) // 60
+    secs = total_sec % 60
     if hours > 0:
         return f"{hours}h {minutes:02d}m {secs:02d}s"
     return f"{minutes:02d}:{secs:02d}"
 
 
-def format_views(views: Optional[int]) -> str:
-    """Formats view count with commas."""
+def format_views(views: Any) -> str:
+    """Formats view count with commas. Safely handles floats and strings."""
     if views is None:
         return "N/A"
-    return f"{views:,} views"
+    try:
+        val = int(round(float(views)))
+        return f"{val:,} views"
+    except (ValueError, TypeError):
+        views_str = str(views).strip()
+        return "N/A" if not views_str else f"{views_str} views"
 
 
-def format_file_size(bytes_val: Optional[int]) -> str:
-    """Formats bytes into human-readable string (KB, MB, GB)."""
-    if not bytes_val or bytes_val <= 0:
+def format_file_size(bytes_val: Any) -> str:
+    """Formats bytes into human-readable string (KB, MB, GB). Safely handles non-integers."""
+    if not bytes_val:
         return "Unknown size"
-    size = float(bytes_val)
+    try:
+        size = float(bytes_val)
+    except (ValueError, TypeError):
+        return "Unknown size"
+
+    if size <= 0:
+        return "Unknown size"
+
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size < 1024.0:
             return f"{size:.1f} {unit}"
@@ -314,9 +432,120 @@ def open_folder(folder_path: str):
             subprocess.Popen(["open", abs_path])
         else:
             subprocess.Popen(["xdg-open", abs_path])
-        console.print(f"  [bold green]✓[/bold green] [dim]Opened in file manager:[/dim] [cyan]{abs_path}[/cyan]\n")
     except Exception as e:
         console.print(f"  [dim yellow]Notice: Could not open folder automatically ({e})[/dim yellow]\n")
+
+
+def detect_platform(url: str) -> Dict[str, Any]:
+    """
+    Intelligently detects media platform from URL.
+    Returns dictionary with platform key, display name, rich badge, folder name, and theme color.
+    """
+    url_lower = url.lower()
+    if any(d in url_lower for d in ["facebook.com", "fb.watch", "fb.com", "fb.me"]):
+        return {
+            "key": "facebook",
+            "name": "Facebook",
+            "badge": "[bold white on blue] Facebook [/bold white on blue]",
+            "color": "bright_blue",
+            "icon": "🔵",
+            "folder": "Facebook",
+            "is_social": True,
+        }
+    elif any(d in url_lower for d in ["youtube.com", "youtu.be"]):
+        return {
+            "key": "youtube",
+            "name": "YouTube",
+            "badge": "[bold white on red] YouTube [/bold white on red]",
+            "color": "bright_red",
+            "icon": "🔴",
+            "folder": "YouTube",
+            "is_social": False,
+        }
+    elif any(d in url_lower for d in ["instagram.com", "instagr.am"]):
+        return {
+            "key": "instagram",
+            "name": "Instagram",
+            "badge": "[bold white on magenta] Instagram [/bold white on magenta]",
+            "color": "bright_magenta",
+            "icon": "🟣",
+            "folder": "Instagram",
+            "is_social": True,
+        }
+    elif "tiktok.com" in url_lower:
+        return {
+            "key": "tiktok",
+            "name": "TikTok",
+            "badge": "[bold white on black] TikTok [/bold white on black]",
+            "color": "bright_white",
+            "icon": "⬛",
+            "folder": "TikTok",
+            "is_social": True,
+        }
+    elif any(d in url_lower for d in ["twitter.com", "x.com"]):
+        return {
+            "key": "twitter",
+            "name": "Twitter / X",
+            "badge": "[bold white on cyan] Twitter/X [/bold white on cyan]",
+            "color": "bright_cyan",
+            "icon": "🐦",
+            "folder": "Twitter",
+            "is_social": True,
+        }
+    else:
+        return {
+            "key": "generic",
+            "name": "Web Media",
+            "badge": "[bold white on green] Web Media [/bold white on green]",
+            "color": "bright_green",
+            "icon": "🌐",
+            "folder": "WebMedia",
+            "is_social": False,
+        }
+
+
+def clean_media_title(info: Dict[str, Any], platform_key: str) -> str:
+    """
+    Intelligently cleans and resolves human-readable titles.
+    For Facebook/Instagram posts where 'title' is missing or numeric, falls back to caption snippet or creator.
+    """
+    title = (info.get("title") or "").strip()
+    desc = (info.get("description") or "").strip()
+    uploader = (info.get("uploader") or info.get("channel") or info.get("uploader_id") or "").strip()
+
+    is_generic = False
+    if not title:
+        is_generic = True
+    elif platform_key == "facebook":
+        title_lower = title.lower()
+        if "facebook video" in title_lower or title_lower.isdigit() or len(title_lower) < 4:
+            is_generic = True
+
+    if is_generic and desc:
+        lines = [line.strip() for line in desc.splitlines() if line.strip()]
+        if lines:
+            first_line = lines[0]
+            if len(first_line) > 60:
+                first_line = first_line[:57] + "..."
+            if uploader and uploader not in first_line:
+                title = f"{uploader} - {first_line}"
+            else:
+                title = first_line
+
+    if not title:
+        if uploader:
+            title = f"{uploader} - {info.get('id', 'Media')}"
+        else:
+            title = f"Media_{info.get('id', 'video')}"
+
+    # Strip dangerous filename characters for Linux / Windows / macOS
+    cleaned = "".join(c for c in title if c not in r'\/:*?"<>|' and ord(c) >= 32).strip()
+
+    # Enforce cross-platform safe filename length (max 80 chars / 180 bytes in UTF-8)
+    if len(cleaned.encode("utf-8", errors="ignore")) > 180:
+        cleaned = cleaned[:60] + "..."
+
+    return cleaned or "Media_Download"
 
 
 # ====================================================================
@@ -324,23 +553,56 @@ def open_folder(folder_path: str):
 # ====================================================================
 
 def render_header():
-    """Renders the top application banner and system status badges."""
+    """Renders the top application banner and system status badges with next-level styling."""
     ffmpeg_ready = is_ffmpeg_available()
-    ffmpeg_badge = "[bright_green]● FFmpeg: Ready (Lossless Merge)[/bright_green]" if ffmpeg_ready else "[yellow]● FFmpeg: Not Found (Run run.sh/bat)[/yellow]"
+    ffmpeg_st = "[bold green]Ready[/bold green]" if ffmpeg_ready else "[bold yellow]Missing[/bold yellow]"
     os_name = "Windows" if sys.platform == "win32" else ("macOS" if sys.platform == "darwin" else "Linux")
+
+    cookies_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+    cookies_present = os.path.isfile(cookies_file)
+    cookies_st = "[bold green]cookies.txt[/bold green]" if cookies_present else "[dim]Default[/dim]"
 
     content = Table.grid(expand=True)
     content.add_column(justify="center")
-    content.add_row("[bold bright_white]⚡ YOUTUBE & MEDIA DOWNLOADER PRO ⚡[/bold bright_white]")
-    content.add_row("[dim]Ultra HD (8K / 4K / 1080p) • Lossless Audio • Smart Resume • Playlist Support[/dim]")
-    content.add_row("")
-    content.add_row(
-        f"[cyan]● Engine: yt-dlp[/cyan]  │  {ffmpeg_badge}  │  [bright_white]● OS: {os_name}[/bright_white]  │  [bright_magenta]● Log: {os.path.basename(LOG_FILE)}[/bright_magenta]"
+
+    # 1. Hero Brand Title
+    title = Text.from_markup(
+        "[bold bright_yellow]⚡[/bold bright_yellow] "
+        "[bold bright_white]UNIVERSAL[/bold bright_white] "
+        "[bold bright_cyan]MEDIA DOWNLOADER[/bold bright_cyan] "
+        "[bold black on bright_yellow] PRO [/bold black on bright_yellow] "
+        "[bold dim white]v3.5[/bold dim white]"
     )
+    sub = Text.from_markup("[dim cyan]Lossless 8K / 4K / HD Video & 320kbps Audio Merging Engine[/dim cyan]")
+
+    # 2. Supported Platforms Ribbon
+    platforms = Text.from_markup(
+        "[bold white on #e50914] ▶ YouTube [/]  "
+        "[bold white on #1877f2] f Facebook [/]  "
+        "[bold white on #c13584] 📷 Instagram [/]  "
+        "[bold white on #010101] 🎵 TikTok [/]  "
+        "[bold white on #1da1f2] 𝕏 Twitter [/]"
+    )
+
+    # 3. System Specs Line (Clean, guaranteed single-line fit on 80-col)
+    status_line = Text.from_markup(
+        f"[dim]Engine:[/dim] [cyan]yt-dlp[/cyan]   │   "
+        f"[dim]FFmpeg:[/dim] {ffmpeg_st}   │   "
+        f"[dim]OS:[/dim] [bright_white]{os_name}[/bright_white]   │   "
+        f"[dim]Auth:[/dim] {cookies_st}"
+    )
+
+    content.add_row(title)
+    content.add_row(sub)
+    content.add_row(Text(""))
+    content.add_row(platforms)
+    content.add_row(Text("─" * 68, style="dim #1e293b"))
+    content.add_row(status_line)
 
     banner = Panel(
         content,
         border_style="bright_cyan",
+        box=box.ROUNDED,
         padding=(1, 2),
     )
     console.print()
@@ -348,16 +610,127 @@ def render_header():
     console.print()
 
 
-def fetch_media_info(url: str) -> Optional[Dict[str, Any]]:
+def render_input_prompt_card():
+    """Renders an interactive, styled prompt card for URL input."""
+    content = Table.grid(expand=True)
+    content.add_column(justify="left")
+
+    line1 = Text.from_markup("[bold bright_white]📥 Paste Media Link (Video, Reel, Short or Playlist):[/bold bright_white]")
+    line2 = Text.from_markup("[dim]Keys: [/dim][bold bright_red]q[/bold bright_red][dim]=Quit  •  [/dim][bold yellow]cookies[/bold yellow][dim]=Auth Help  •  [/dim][bold cyan]logs[/bold cyan][dim]=View Log  •  [/dim][bold magenta]help[/bold magenta][dim]=Guide[/dim]")
+
+    content.add_row(line1)
+    content.add_row(line2)
+
+    prompt_panel = Panel(
+        content,
+        border_style="cyan",
+        box=box.ROUNDED,
+        padding=(0, 2),
+    )
+    console.print(prompt_panel)
+
+
+def show_cookies_modal():
+    """Displays an interactive modal guiding the user on how to use cookies.txt."""
+    cookies_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+    has_cookies = os.path.isfile(cookies_path)
+
+    grid = Table.grid(padding=(0, 1), expand=True)
+    grid.add_column()
+
+    status_text = "[bold bright_green]✓ Active & Loaded[/bold bright_green]" if has_cookies else "[bold yellow]● Not Found (Public mode active)[/bold yellow]"
+
+    grid.add_row(Text.from_markup(f"[bold cyan]Current Status:[/bold cyan] {status_text}"))
+    grid.add_row(Text.from_markup(f"[dim]Expected Location: {cookies_path}[/dim]\n"))
+
+    grid.add_row(Text.from_markup("[bold bright_white]Why do you need cookies.txt?[/bold bright_white]"))
+    grid.add_row(Text.from_markup("• Download [bold blue]private Facebook group videos[/bold blue] or friends-only posts."))
+    grid.add_row(Text.from_markup("• Download [bold magenta]restricted Instagram reels[/bold magenta] and follower-only media."))
+    grid.add_row(Text.from_markup("• Bypass [bold red]YouTube age-restrictions[/bold red] or member-only videos.\n"))
+
+    grid.add_row(Text.from_markup("[bold bright_white]How to set up in 2 minutes:[/bold bright_white]"))
+    grid.add_row(Text.from_markup("1. Install a browser extension (e.g. [bold cyan]Get cookies.txt LOCALLY[/bold cyan])."))
+    grid.add_row(Text.from_markup("2. Open Facebook / YouTube in your browser while logged in."))
+    grid.add_row(Text.from_markup("3. Export cookies and save the file as [bold bright_yellow]cookies.txt[/bold bright_yellow] in this project folder."))
+    grid.add_row(Text.from_markup("4. The engine will automatically authenticate all restricted downloads!"))
+
+    panel = Panel(
+        grid,
+        title="[bold bright_yellow] 🍪 Cookie Authentication Guide [/bold bright_yellow]",
+        border_style="yellow",
+        box=box.ROUNDED,
+        padding=(1, 2),
+    )
+    console.print()
+    console.print(panel)
+    console.print()
+
+
+def show_help_modal():
+    """Displays an interactive quick reference guide."""
+    grid = Table.grid(padding=(0, 1), expand=True)
+    grid.add_column()
+
+    grid.add_row(Text.from_markup("[bold bright_white]⚡ Key Commands & Shortcuts:[/bold bright_white]"))
+    grid.add_row(Text.from_markup("  [bold red]q[/bold red]            : Exit application immediately."))
+    grid.add_row(Text.from_markup("  [bold yellow]cookies[/bold yellow]      : View cookies.txt status & setup instructions."))
+    grid.add_row(Text.from_markup("  [bold cyan]logs[/bold cyan]         : Open and inspect download logs in terminal."))
+    grid.add_row(Text.from_markup("  [bold green]clear[/bold green]        : Clear screen and refresh dashboard."))
+    grid.add_row(Text.from_markup("  [bold white]Ctrl + C[/bold white]     : Safely cancel current action or download.\n"))
+
+    grid.add_row(Text.from_markup("[bold bright_white]🎯 Navigation & Quality:[/bold bright_white]"))
+    grid.add_row(Text.from_markup("  • Use [bold cyan]↑ / ↓[/bold cyan] arrow keys or numbers [bold cyan]1-5[/bold cyan] to select format quality."))
+    grid.add_row(Text.from_markup("  • Press [bold cyan]Enter[/bold cyan] to confirm selection and start lossless merge."))
+    grid.add_row(Text.from_markup("  • Download folders are auto-sorted into [bold cyan]downloads/<Platform>/[/bold cyan]."))
+
+    panel = Panel(
+        grid,
+        title="[bold bright_cyan] 💡 Quick Reference & Help [/bold bright_cyan]",
+        border_style="bright_cyan",
+        box=box.ROUNDED,
+        padding=(1, 2),
+    )
+    console.print()
+    console.print(panel)
+    console.print()
+
+
+def render_goodbye_card():
+    """Displays a clean exit panel upon quit."""
+    content = Table.grid(expand=True)
+    content.add_column(justify="center")
+    content.add_row(Text.from_markup("[bold bright_cyan]⚡ Thank you for using Universal Media Downloader Pro![/bold bright_cyan]"))
+    content.add_row(Text.from_markup("[dim]All downloads are safely stored in your project's downloads/ directory.[/dim]"))
+    panel = Panel(
+        content,
+        border_style="bright_cyan",
+        box=box.ROUNDED,
+        padding=(1, 2),
+    )
+    console.print()
+    console.print(panel)
+    console.print()
+
+
+def fetch_media_info(url: str, cookies_from_browser: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Fetches media title, uploader, duration, and playlist count with a live spinner."""
+    platform = detect_platform(url)
+    cookies_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+
     ydl_opts = {
         "extract_flat": "in_playlist",
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
     }
+    if os.path.isfile(cookies_file):
+        ydl_opts["cookiefile"] = cookies_file
+        app_logger.info(f"Using local cookies.txt from: {cookies_file}")
+    elif cookies_from_browser:
+        ydl_opts["cookiesfrombrowser"] = (cookies_from_browser, None, None, None)
+        app_logger.info(f"Using browser cookies from: {cookies_from_browser}")
 
-    with console.status("[bold cyan]⠋ Fetching media information from YouTube...", spinner="dots"):
+    with console.status(f"[bold cyan]⠋ Fetching media information from {platform['name']}...", spinner="dots"):
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -365,59 +738,76 @@ def fetch_media_info(url: str) -> Optional[Dict[str, Any]]:
                     return None
                 return info
         except Exception as e:
-            console.print(f"\n  [bold red][ERROR][/bold red] Could not fetch media info: [dim]{e}[/dim]\n")
+            err_msg = str(e)
+            console.print(f"\n  [bold red][ERROR][/bold red] Could not fetch media info: [dim]{err_msg}[/dim]\n")
+            if any(term in err_msg.lower() for term in ("login", "sign in", "private", "account", "cookies", "restricted")):
+                console.print("  [bold yellow]💡 Authentication / Cookie Tip:[/bold yellow]")
+                console.print("  This video might be private, friends-only, or requires Facebook/Instagram login.")
+                console.print("  To download private videos, place an exported [bold white]cookies.txt[/bold white] file in:")
+                console.print(f"  [cyan]{os.path.dirname(os.path.abspath(__file__))}/cookies.txt[/cyan]\n")
             return None
 
 
-def render_media_card(info: Dict[str, Any], url: str) -> bool:
+def render_media_card(info: Dict[str, Any], url: str, platform: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
     """
     Renders a visual card of the detected media.
-    Returns True if content is a playlist, False otherwise.
+    Returns (is_playlist, resolved_clean_title).
     """
+    platform = platform or detect_platform(url)
     is_playlist = info.get("_type") == "playlist" or "entries" in info
-    title = info.get("title") or "Unknown Title"
+    title = clean_media_title(info, platform["key"])
     uploader = info.get("uploader") or info.get("channel") or info.get("uploader_id") or "Various / Unknown"
 
     table = Table.grid(padding=(0, 2))
     table.add_column("Key", style="bold cyan", justify="right", width=12)
     table.add_column("Value", style="white")
 
+    table.add_row("Platform:", f"{platform['badge']}")
     table.add_row("Title:", f"[bold bright_white]{title}[/bold bright_white]")
-    table.add_row("Channel:", f"[bright_yellow]{uploader}[/bright_yellow]")
+    table.add_row("Author/Page:", f"[bright_yellow]{uploader}[/bright_yellow]")
 
     if is_playlist:
         entries = list(info.get("entries") or [])
         count = len(entries) if entries else (info.get("playlist_count") or "Unknown")
-        table.add_row("Content:", f"[bold bright_magenta]Playlist ({count} videos)[/bold bright_magenta]")
+        table.add_row("Content:", f"[bold bright_magenta]Playlist / Collection ({count} items)[/bold bright_magenta]")
     else:
         duration = format_duration(info.get("duration"))
         views = format_views(info.get("view_count"))
         table.add_row("Duration:", f"[bright_green]{duration}[/bright_green]")
-        table.add_row("Views:", f"[bright_white]{views}[/bright_white]")
-        table.add_row("Content:", "[bold bright_cyan]Single Video[/bold bright_cyan]")
+        if views != "N/A":
+            table.add_row("Views:", f"[bright_white]{views}[/bright_white]")
+        table.add_row("Content:", f"[bold bright_cyan]{platform['name']} Media[/bold bright_cyan]")
 
     table.add_row("Source URL:", f"[dim]{url[:70] + ('...' if len(url) > 70 else '')}[/dim]")
 
+    border_color = platform["color"] if platform["color"] in ("cyan", "green", "magenta", "yellow", "blue", "red") else "cyan"
     panel = Panel(
         table,
-        title="[bold bright_cyan] Media Information [/bold bright_cyan]",
-        border_style="cyan",
+        title=f"[bold bright_white] {platform['icon']} Media Information [/bold bright_white]",
+        border_style=border_color,
+        box=box.ROUNDED,
         padding=(1, 2),
     )
+    console.print()
     console.print(panel)
     console.print()
-    return is_playlist
+    return is_playlist, title
 
 
-def generate_format_menu_table(selected_index: int) -> Panel:
+def generate_format_menu_table(
+    selected_index: int,
+    profiles: Optional[List[Dict[str, Any]]] = None,
+    platform_name: str = "Media",
+) -> Panel:
     """Constructs the styled format table for the interactive menu."""
+    profiles = profiles or FORMAT_PROFILES
     table = Table(show_header=True, header_style="bold bright_white", box=None, padding=(0, 1), expand=True)
     table.add_column("Key", width=6, justify="center")
-    table.add_column("Quality & Format", width=28)
+    table.add_column("Quality & Format", width=30)
     table.add_column("Tag", width=14, justify="center")
     table.add_column("Description", style="dim")
 
-    for idx, prof in enumerate(FORMAT_PROFILES):
+    for idx, prof in enumerate(profiles):
         num = idx + 1
         tag = f"[{prof['tag_color']}][{prof['tag']}][/{prof['tag_color']}]"
 
@@ -438,24 +828,30 @@ def generate_format_menu_table(selected_index: int) -> Panel:
 
     return Panel(
         table,
-        title="[bold bright_cyan] Select Quality & Format [/bold bright_cyan]",
-        subtitle="[dim]Use Up/Down arrows or keys 1-5, Enter to confirm[/dim]",
+        title=f"[bold bright_cyan] Select Quality & Format ({platform_name}) [/bold bright_cyan]",
+        subtitle=f"[dim]Use Up/Down arrows or keys 1-{len(profiles)}, Enter to confirm[/dim]",
         border_style="cyan",
+        box=box.ROUNDED,
         padding=(1, 1),
     )
 
 
-def interactive_format_menu(default_index: int = 0) -> int:
+def interactive_format_menu(
+    profiles: Optional[List[Dict[str, Any]]] = None,
+    default_index: int = 0,
+    platform_name: str = "Media",
+) -> int:
     """
     Renders an interactive selection menu with Arrow Key Navigation and direct 1-5 keypresses.
     Falls back gracefully to numeric input if not in a TTY.
     """
-    num_options = len(FORMAT_PROFILES)
-    selected = default_index
+    profiles = profiles or FORMAT_PROFILES
+    num_options = len(profiles)
+    selected = min(default_index, num_options - 1)
 
     # Fallback for non-interactive TTY environments
     if not sys.stdin.isatty():
-        console.print(generate_format_menu_table(selected))
+        console.print(generate_format_menu_table(selected, profiles, platform_name))
         choice = Prompt.ask(
             "  Select format",
             choices=[str(i + 1) for i in range(num_options)],
@@ -468,19 +864,19 @@ def interactive_format_menu(default_index: int = 0) -> int:
     sys.stdout.flush()
 
     try:
-        with Live(generate_format_menu_table(selected), console=console, auto_refresh=False) as live:
+        with Live(generate_format_menu_table(selected, profiles, platform_name), console=console, auto_refresh=False) as live:
             while True:
                 key = read_key()
 
                 if key in ("UP", "k", "K", "w", "W"):
                     selected = (selected - 1) % num_options
-                    live.update(generate_format_menu_table(selected), refresh=True)
+                    live.update(generate_format_menu_table(selected, profiles, platform_name), refresh=True)
                 elif key in ("DOWN", "j", "J", "s", "S"):
                     selected = (selected + 1) % num_options
-                    live.update(generate_format_menu_table(selected), refresh=True)
+                    live.update(generate_format_menu_table(selected, profiles, platform_name), refresh=True)
                 elif key.isdigit() and 1 <= int(key) <= num_options:
                     selected = int(key) - 1
-                    live.update(generate_format_menu_table(selected), refresh=True)
+                    live.update(generate_format_menu_table(selected, profiles, platform_name), refresh=True)
                     break
                 elif key in ("ENTER", "SPACE"):
                     break
@@ -499,7 +895,7 @@ def interactive_format_menu(default_index: int = 0) -> int:
             except Exception:
                 pass
 
-    chosen = FORMAT_PROFILES[selected]
+    chosen = profiles[selected]
     console.print(f"  [bold bright_green]✓ Selected:[/bold bright_green] [bold white]{chosen['name']}[/bold white] [dim]({chosen['desc']})[/dim]\n")
     return selected
 
@@ -540,6 +936,7 @@ def select_playlist_mode(info: Dict[str, Any], url: str) -> bool:
             title="[bold yellow] Video in Playlist Detected [/bold yellow]",
             subtitle="[dim]Use Up/Down arrows or 1-2, Enter to confirm[/dim]",
             border_style="yellow",
+            box=box.ROUNDED,
             padding=(1, 2),
         )
 
@@ -575,17 +972,20 @@ def render_preflight_card(
     destination_path: str,
     is_playlist: bool,
     playlist_count: Optional[int] = None,
+    platform: Optional[Dict[str, Any]] = None,
 ):
     """Renders the pre-download confirmation summary card."""
     table = Table.grid(padding=(0, 2))
     table.add_column("Key", style="bold cyan", justify="right", width=14)
     table.add_column("Value", style="white")
 
+    if platform:
+        table.add_row("Platform:", f"{platform['badge']}")
     table.add_row("Target:", f"[bold bright_white]{title}[/bold bright_white]")
     table.add_row("Profile:", f"[bright_yellow]{format_name}[/bright_yellow]")
     table.add_row("Destination:", f"[bright_cyan]{destination_path}[/bright_cyan]")
     if is_playlist:
-        table.add_row("Playlist Items:", f"[bright_magenta]{playlist_count or 'Multiple'} videos[/bright_magenta]")
+        table.add_row("Playlist Items:", f"[bright_magenta]{playlist_count or 'Multiple'} items[/bright_magenta]")
     table.add_row("Smart Resume:", "[bright_green]Active (.part files will resume seamlessly)[/bright_green]")
     table.add_row("Disk Check:", "[bright_green]Active (Existing files > 1KB will be skipped)[/bright_green]")
 
@@ -593,6 +993,7 @@ def render_preflight_card(
         table,
         title="[bold bright_cyan] Pre-Download Summary [/bold bright_cyan]",
         border_style="bright_cyan",
+        box=box.ROUNDED,
         padding=(1, 2),
     )
     console.print(panel)
@@ -606,12 +1007,38 @@ def render_success_card(
     is_playlist: bool,
     completed_items: Optional[List[Dict[str, Any]]] = None,
     skipped_items: Optional[List[Dict[str, Any]]] = None,
+    platform: Optional[Dict[str, Any]] = None,
 ):
     """Renders the success dashboard upon download completion."""
     completed_items = completed_items or []
     skipped_items = skipped_items or []
     num_completed = len(completed_items)
     num_skipped = len(skipped_items)
+
+    if num_completed == 0 and num_skipped == 0:
+        table = Table.grid(padding=(0, 2))
+        table.add_column("Key", style="bold red", justify="right", width=14)
+        table.add_column("Value", style="white")
+
+        if platform:
+            table.add_row("Platform:", f"{platform['badge']}")
+        table.add_row("Status:", "[bold red]No Media Downloaded (0 files saved)[/bold red]")
+        table.add_row("Target:", f"[bold bright_white]{title}[/bold bright_white]")
+        table.add_row("Destination:", f"[bright_cyan]{destination_path}[/bright_cyan]")
+        table.add_row("Time Taken:", f"[bright_white]{elapsed_str}[/bright_white]")
+        table.add_row("Log File:", f"[bright_magenta]{LOG_FILE}[/bright_magenta]")
+
+        panel = Panel(
+            table,
+            title="[bold red] Download Incomplete / Check Log [/bold red]",
+            border_style="red",
+            box=box.ROUNDED,
+            padding=(1, 2),
+        )
+        console.print()
+        console.print(panel)
+        console.print("  [bold yellow]💡 Tip:[/bold yellow] Inspect recent logs (Option 3 in the menu below) to see details, or check video permissions.\n")
+        return
 
     table = Table.grid(padding=(0, 2))
     table.add_column("Key", style="bold bright_green", justify="right", width=14)
@@ -621,6 +1048,8 @@ def render_success_card(
     if num_skipped > 0:
         status_str += f"  [dim yellow]({num_skipped} already on disk / skipped)[/dim yellow]"
 
+    if platform:
+        table.add_row("Platform:", f"{platform['badge']}")
     table.add_row("Status:", status_str)
     table.add_row("Media:", f"[bold bright_white]{title}[/bold bright_white]")
     table.add_row("Saved in:", f"[bright_cyan]{destination_path}[/bright_cyan]")
@@ -631,6 +1060,7 @@ def render_success_card(
         table,
         title="[bold bright_green] Download Complete [/bold bright_green]",
         border_style="bright_green",
+        box=box.ROUNDED,
         padding=(1, 2),
     )
     console.print()
@@ -674,6 +1104,7 @@ def render_success_card(
             item_table,
             title="[bold bright_cyan] Downloaded Items Summary [/bold bright_cyan]",
             border_style="cyan",
+            box=box.ROUNDED,
             padding=(1, 1),
         )
         console.print(summary_panel)
@@ -770,6 +1201,9 @@ def build_ydl_options(
     progress_hooks: list,
     postprocessor_hooks: list,
     post_hooks: list,
+    platform_key: str = "generic",
+    cookies_file: Optional[str] = None,
+    cookies_from_browser: Optional[str] = None,
 ) -> dict:
     """Builds the comprehensive yt-dlp parameters."""
     os.makedirs(save_path, exist_ok=True)
@@ -778,14 +1212,15 @@ def build_ydl_options(
         out_template = os.path.join(
             save_path,
             "%(playlist_title|Playlist)s",
-            "%(playlist_index&{:02d} - |)s%(title)s.%(ext)s",
+            "%(playlist_index&{:02d} - |)s%(title,id)s.%(ext)s",
         )
     else:
-        out_template = os.path.join(save_path, "%(title)s.%(ext)s")
+        out_template = os.path.join(save_path, "%(title,id)s.%(ext)s")
 
     ydl_opts = {
         "outtmpl": {"default": out_template},
-        "windowsfilenames": sys.platform == "win32",
+        "windowsfilenames": True,
+        "trim_file_name": 100,
         "ignoreerrors": True,
         "retries": 10,
         "fragment_retries": 10,
@@ -802,55 +1237,104 @@ def build_ydl_options(
         "no_warnings": True,
     }
 
+    if cookies_file and os.path.isfile(cookies_file):
+        ydl_opts["cookiefile"] = cookies_file
+    elif cookies_from_browser:
+        ydl_opts["cookiesfrombrowser"] = (cookies_from_browser, None, None, None)
+
     # Format choices mapping:
-    # 0 -> Maximum Quality (8K/4K/1440p/1080p60 MP4 + Best Audio)
+    # 0 -> Maximum Quality (8K/4K/1080p on YouTube, Best HD on Facebook/Social)
     # 1 -> 1080p Full HD Video (MP4)
-    # 2 -> 720p HD Video (MP4)
+    # 2 -> 720p HD Video on YouTube, 480p SD on Social
     # 3 -> Audio Only (320kbps MP3)
     # 4 -> Audio Only (Best Original / M4A)
 
-    if format_choice == 0:
-        ydl_opts.update({
-            "format": "bestvideo+bestaudio/best",
-            "format_sort": ["res", "fps", "hdr:12", "vcodec", "channels", "br", "asr"],
-            "merge_output_format": "mp4",
-            "final_ext": "mp4",
-        })
-    elif format_choice == 1:
-        ydl_opts.update({
-            "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-            "merge_output_format": "mp4",
-            "final_ext": "mp4",
-        })
-    elif format_choice == 2:
-        ydl_opts.update({
-            "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
-            "merge_output_format": "mp4",
-            "final_ext": "mp4",
-        })
-    elif format_choice == 3:
-        ydl_opts.update({
-            "format": "bestaudio/best",
-            "final_ext": "mp3",
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "320",
-                }
-            ],
-        })
-    elif format_choice == 4:
-        ydl_opts.update({
-            "format": "bestaudio/best",
-            "final_ext": "m4a",
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "m4a",
-                }
-            ],
-        })
+    if platform_key in ("facebook", "instagram", "tiktok", "twitter"):
+        if format_choice == 0:
+            ydl_opts.update({
+                "format": "bestvideo+bestaudio/best",
+                "merge_output_format": "mp4",
+                "final_ext": "mp4",
+            })
+        elif format_choice == 1:
+            ydl_opts.update({
+                "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+                "merge_output_format": "mp4",
+                "final_ext": "mp4",
+            })
+        elif format_choice == 2:
+            ydl_opts.update({
+                "format": "bestvideo[height<=480]+bestaudio/best[height<=480]/best",
+                "merge_output_format": "mp4",
+                "final_ext": "mp4",
+            })
+        elif format_choice == 3:
+            ydl_opts.update({
+                "format": "bestaudio/best",
+                "final_ext": "mp3",
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "320",
+                    }
+                ],
+            })
+        elif format_choice == 4:
+            ydl_opts.update({
+                "format": "bestaudio/best",
+                "final_ext": "m4a",
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "m4a",
+                    }
+                ],
+            })
+    else:
+        # YouTube & Standard Web Media
+        if format_choice == 0:
+            ydl_opts.update({
+                "format": "bestvideo+bestaudio/best",
+                "format_sort": ["res", "fps", "hdr:12", "vcodec", "channels", "br", "asr"],
+                "merge_output_format": "mp4",
+                "final_ext": "mp4",
+            })
+        elif format_choice == 1:
+            ydl_opts.update({
+                "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+                "merge_output_format": "mp4",
+                "final_ext": "mp4",
+            })
+        elif format_choice == 2:
+            ydl_opts.update({
+                "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
+                "merge_output_format": "mp4",
+                "final_ext": "mp4",
+            })
+        elif format_choice == 3:
+            ydl_opts.update({
+                "format": "bestaudio/best",
+                "final_ext": "mp3",
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "320",
+                    }
+                ],
+            })
+        elif format_choice == 4:
+            ydl_opts.update({
+                "format": "bestaudio/best",
+                "final_ext": "m4a",
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "m4a",
+                    }
+                ],
+            })
 
     return ydl_opts
 
@@ -865,6 +1349,9 @@ def run_download(
     format_choice: int,
     is_playlist: bool,
     total_videos: Optional[int] = None,
+    platform_key: str = "generic",
+    cookies_file: Optional[str] = None,
+    cookies_from_browser: Optional[str] = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Executes the download with the Rich Progress Engine."""
     progress = Progress(
@@ -983,6 +1470,9 @@ def run_download(
         progress_hooks=[progress_hook],
         postprocessor_hooks=[postprocessor_hook],
         post_hooks=[post_hook_callback],
+        platform_key=platform_key,
+        cookies_file=cookies_file,
+        cookies_from_browser=cookies_from_browser,
     )
 
     with progress:
@@ -1025,6 +1515,7 @@ def view_recent_logs(lines: int = 25):
             title=f"[bold bright_cyan] Recent Logs ({os.path.basename(LOG_FILE)}) [/bold bright_cyan]",
             subtitle=f"[dim]Showing last {len(recent)} entries • Location: {LOG_FILE}[/dim]",
             border_style="cyan",
+            box=box.ROUNDED,
             padding=(1, 2),
         )
         console.print()
@@ -1039,7 +1530,7 @@ def view_recent_logs(lines: int = 25):
 # ====================================================================
 
 POST_DOWNLOAD_ACTIONS = [
-    "Download another video / playlist",
+    "Download another video / media / playlist",
     "Open downloads folder in file manager",
     "View recent logs (youtube_downloader.log)",
     "Exit",
@@ -1067,6 +1558,7 @@ def generate_post_download_table(selected_index: int) -> Panel:
         title="[bold bright_cyan] What would you like to do next? [/bold bright_cyan]",
         subtitle="[dim]Use Up/Down arrows or keys 1-4, Enter to confirm[/dim]",
         border_style="cyan",
+        box=box.ROUNDED,
         padding=(1, 2),
     )
 
@@ -1138,7 +1630,7 @@ def interactive_post_download_menu(default_index: int = 0) -> int:
 
 def main():
     app_logger.info("=" * 60)
-    app_logger.info(f"YouTube Downloader Pro started (Python: {sys.version.split()[0]} | OS: {sys.platform})")
+    app_logger.info(f"Universal Media Downloader Pro started (Python: {sys.version.split()[0]} | OS: {sys.platform})")
 
     # Clear terminal completely on launcher startup
     os.system("cls" if sys.platform == "win32" else "clear")
@@ -1149,24 +1641,46 @@ def main():
         console.clear()
         render_header()
 
-        # Step 1: Input URL
-        console.print("  [bold bright_cyan]Enter YouTube Video, Shorts, or Playlist URL:[/bold bright_cyan]")
-        console.print("  [dim](Paste URL and press Enter. Type 'q' to quit)[/dim]")
-        url = console.input("  [bold cyan]> [/bold cyan]").strip()
+        # Step 1: Input URL with Next-Level Card and Command Handlers
+        render_input_prompt_card()
+        url = console.input("  [bold bright_cyan]❯[/bold bright_cyan] [bold cyan]URL[/bold cyan] : ").strip()
 
-        if not url or url.lower() in ("q", "quit", "exit"):
-            app_logger.info("User requested application exit.")
-            console.print("\n  [dim]Exiting application. Have a great day![/dim]\n")
-            break
-
-        if not (url.startswith("http://") or url.startswith("https://") or "youtu" in url):
-            app_logger.warning(f"Invalid URL entered: {url}")
-            console.print("\n  [bold red][ERROR][/bold red] Invalid URL entered. Please provide a valid YouTube link.\n")
-            Prompt.ask("  Press Enter to try again...")
+        if not url:
             continue
 
-        app_logger.info(f"Processing URL: {url}")
-        console.print()
+        url_cmd = url.lower()
+        if url_cmd in ("q", "quit", "exit"):
+            app_logger.info("User requested application exit.")
+            render_goodbye_card()
+            break
+        elif url_cmd in ("cookies", "cookie", "auth"):
+            show_cookies_modal()
+            Prompt.ask("  Press Enter to return to main menu...")
+            continue
+        elif url_cmd in ("logs", "log"):
+            view_recent_logs()
+            Prompt.ask("  Press Enter to return to main menu...")
+            continue
+        elif url_cmd in ("help", "?"):
+            show_help_modal()
+            Prompt.ask("  Press Enter to return to main menu...")
+            continue
+        elif url_cmd in ("clear", "cls"):
+            continue
+
+        # Protocol prefix auto-fix
+        if not (url.startswith("http://") or url.startswith("https://")):
+            if "." in url and not url.startswith("http"):
+                url = "https://" + url
+            else:
+                app_logger.warning(f"Invalid URL entered: {url}")
+                console.print("\n  [bold red][ERROR][/bold red] Invalid URL entered. Please provide a valid media link.\n")
+                Prompt.ask("  Press Enter to try again...")
+                continue
+
+        platform = detect_platform(url)
+        app_logger.info(f"Processing URL for platform '{platform['name']}': {url}")
+        console.print(f"\n  [bold bright_green]✓ Identified Platform:[/bold bright_green] {platform['badge']}\n")
 
         # Step 2: Fetch and preview media metadata
         info = fetch_media_info(url)
@@ -1175,29 +1689,29 @@ def main():
             Prompt.ask("  Press Enter to continue...")
             continue
 
-        is_playlist = render_media_card(info, url)
+        is_playlist, media_title = render_media_card(info, url, platform)
         playlist_count = None
 
         if is_playlist:
             entries = list(info.get("entries") or [])
             playlist_count = len(entries) if entries else info.get("playlist_count")
 
-        media_title = info.get("title") or "YouTube Media"
         app_logger.info(f"Metadata fetched: '{media_title}' | is_playlist={is_playlist} | items={playlist_count}")
 
-        # Step 3: Check if single video inside a playlist
+        # Step 3: Check if single video inside a playlist (YouTube)
         playlist_id = extract_playlist_id(url)
         if playlist_id and ("v=" in url or "youtu.be/" in url):
             is_playlist = select_playlist_mode(info, url)
             app_logger.info(f"User mode selection for video inside playlist: is_playlist={is_playlist}")
 
         # Step 4: Interactive Format & Quality Menu
-        selected_format = interactive_format_menu(default_index=0)
-        format_profile = FORMAT_PROFILES[selected_format]
+        profiles = get_format_profiles(platform["key"])
+        selected_format = interactive_format_menu(profiles=profiles, default_index=0, platform_name=platform["name"])
+        format_profile = profiles[selected_format]
         app_logger.info(f"Format profile chosen: [{selected_format}] {format_profile['name']} ({format_profile['badge']})")
 
-        # Step 5: Destination Folder
-        default_folder = "downloads"
+        # Step 5: Destination Folder (Auto-organize by platform)
+        default_folder = os.path.join("downloads", platform["folder"])
         console.print(f"  [bold bright_cyan]Destination folder[/bold bright_cyan] [dim](Press Enter for '{default_folder}')[/dim]:")
         folder_input = console.input("  [bold cyan]> [/bold cyan]").strip()
         folder = folder_input if folder_input else default_folder
@@ -1213,18 +1727,24 @@ def main():
             destination_path=full_dest_path,
             is_playlist=is_playlist,
             playlist_count=playlist_count,
+            platform=platform,
         )
 
         # Step 7: Execute Download
         start_time = time.time()
-        app_logger.info(f"Starting download execution for: '{media_title}'")
+        app_logger.info(f"Starting download execution for: '{media_title}' ({platform['name']})")
         try:
+            cookies_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+            active_cookies = cookies_file if os.path.isfile(cookies_file) else None
+
             download_result = run_download(
                 url=url,
                 save_path=folder,
                 format_choice=selected_format,
                 is_playlist=is_playlist,
                 total_videos=playlist_count,
+                platform_key=platform["key"],
+                cookies_file=active_cookies,
             )
             elapsed_sec = int(time.time() - start_time)
             elapsed_str = format_duration(elapsed_sec)
@@ -1243,6 +1763,7 @@ def main():
                 is_playlist=is_playlist,
                 completed_items=completed_list,
                 skipped_items=skipped_list,
+                platform=platform,
             )
 
         except KeyboardInterrupt:
@@ -1273,7 +1794,7 @@ def main():
 
         if action_idx == 3:
             app_logger.info("Application closed by user from menu.")
-            console.print("\n  [dim]Thank you for using YouTube Downloader Pro![/dim]\n")
+            console.print("\n  [dim]Thank you for using Universal Media Downloader Pro![/dim]\n")
             break
 
 

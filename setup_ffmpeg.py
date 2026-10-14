@@ -49,6 +49,7 @@ RESET = "\033[0m"
 def get_ffmpeg_urls() -> tuple[list[str], str]:
     """Returns the mirror URLs and archive extension appropriate for the current platform."""
     is_windows = sys.platform == "win32"
+    is_darwin = sys.platform == "darwin"
     arch = platform.machine().lower()
 
     if is_windows:
@@ -58,6 +59,19 @@ def get_ffmpeg_urls() -> tuple[list[str], str]:
             "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
         ]
         return urls, ".zip"
+    elif is_darwin:
+        # macOS: Apple Silicon (M-series / arm64) vs Intel (x86_64)
+        if "arm" in arch or "aarch64" in arch:
+            urls = [
+                "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-macosarm64-gpl.tar.xz",
+                "https://evermeet.cx/ffmpeg/getrelease/zip",
+            ]
+        else:
+            urls = [
+                "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-macos64-gpl.tar.xz",
+                "https://evermeet.cx/ffmpeg/getrelease/zip",
+            ]
+        return urls, ".tar.xz"
     else:
         # Linux / Unix
         if "arm" in arch or "aarch64" in arch:
@@ -310,7 +324,13 @@ def setup_ffmpeg(force: bool = False) -> bool:
             print(f"{GREEN}[OK]{RESET} FFmpeg is already installed and available on system PATH.")
             return True
 
-    os_label = "Windows" if sys.platform == "win32" else f"Linux ({platform.machine()})"
+    if sys.platform == "win32":
+        os_label = "Windows"
+    elif sys.platform == "darwin":
+        os_label = f"macOS ({platform.machine()})"
+    else:
+        os_label = f"Linux ({platform.machine()})"
+
     print(f"\n{BOLD}{YELLOW}==================================================={RESET}")
     print(f"{BOLD}{YELLOW}          FFmpeg Automatic Setup for {os_label}    {RESET}")
     print(f"{BOLD}{YELLOW}==================================================={RESET}\n")
@@ -330,7 +350,9 @@ def setup_ffmpeg(force: bool = False) -> bool:
 
     if not download_success:
         print(f"\n{RED}[ERROR]{RESET} Failed to download FFmpeg from all available mirrors.")
-        if sys.platform != "win32":
+        if sys.platform == "darwin":
+            print(f"{YELLOW}[Solution]{RESET} Run: brew install ffmpeg")
+        elif sys.platform != "win32":
             print(f"{YELLOW}[Solution]{RESET} Run: sudo apt update && sudo apt install -y ffmpeg")
         else:
             print(f"Please install FFmpeg manually from: https://www.gyan.dev/ffmpeg/builds/")

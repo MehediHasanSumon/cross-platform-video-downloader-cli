@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ====================================================================
-#  YouTube Downloader - Automated Launcher for Linux / Ubuntu
+#  Universal Media Downloader - Automated Launcher (Linux & macOS)
 # ====================================================================
 
 # Colors for terminal output
@@ -15,8 +15,18 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
+# Detect Operating System
+OS_TYPE="$(uname -s)"
+if [ "$OS_TYPE" = "Darwin" ]; then
+    OS_NAME="macOS"
+elif [ "$OS_TYPE" = "Linux" ]; then
+    OS_NAME="Linux"
+else
+    OS_NAME="$OS_TYPE"
+fi
+
 echo -e "${CYAN}===================================================${NC}"
-echo -e "${BOLD}    YouTube Downloader (Linux / Ubuntu Launcher)    ${NC}"
+echo -e "${BOLD}     Universal Media Downloader ($OS_NAME Launcher) ${NC}"
 echo -e "${CYAN}===================================================${NC}"
 echo ""
 
@@ -24,8 +34,13 @@ echo ""
 echo -e "${BOLD}[1/5] Checking Python 3 installation...${NC}"
 if ! command -v python3 >/dev/null 2>&1; then
     echo -e "${RED}[ERROR] Python 3 is not installed or not available in PATH.${NC}"
-    echo -e "Please install Python on Ubuntu by running:"
-    echo -e "    ${YELLOW}sudo apt update && sudo apt install -y python3 python3-venv python3-pip${NC}"
+    if [ "$OS_TYPE" = "Darwin" ]; then
+        echo -e "Please install Python 3 on macOS with Homebrew:"
+        echo -e "    ${YELLOW}brew install python3${NC}"
+    else
+        echo -e "Please install Python on Linux by running:"
+        echo -e "    ${YELLOW}sudo apt update && sudo apt install -y python3 python3-venv python3-pip${NC}"
+    fi
     echo ""
     exit 1
 fi
@@ -40,8 +55,12 @@ if [ ! -f "venv/bin/activate" ]; then
     python3 -m venv venv
     if [ $? -ne 0 ]; then
         echo -e "${RED}[ERROR] Failed to create virtual environment!${NC}"
-        echo -e "On Ubuntu, you might need to install python3-venv:"
-        echo -e "    ${YELLOW}sudo apt install -y python3-venv${NC}"
+        if [ "$OS_TYPE" = "Darwin" ]; then
+            echo -e "On macOS, ensure python3-venv is supported or run: ${YELLOW}python3 -m venv venv${NC}"
+        else
+            echo -e "On Ubuntu/Debian, install python3-venv:"
+            echo -e "    ${YELLOW}sudo apt install -y python3-venv${NC}"
+        fi
         exit 1
     fi
     echo -e "${GREEN}[OK]${NC} Virtual environment created successfully."
@@ -69,7 +88,7 @@ if [ $? -ne 0 ]; then
     if [ -f "requirements.txt" ]; then
         pip install -r requirements.txt
     else
-        pip install -U yt-dlp
+        pip install -U yt-dlp rich
     fi
     if [ $? -ne 0 ]; then
         echo -e "${RED}[ERROR] Failed to install dependencies. Check your internet connection.${NC}"
@@ -91,18 +110,27 @@ fi
 
 if ! command -v ffmpeg >/dev/null 2>&1; then
     echo -e "${CYAN}[INFO]${NC} FFmpeg not found on system PATH."
-    echo -e "${CYAN}[INFO]${NC} Starting automatic standalone FFmpeg setup..."
-    if [ -f "setup_ffmpeg.py" ]; then
-        python3 setup_ffmpeg.py
-        if [ $? -eq 0 ]; then
-            export PATH="$SCRIPT_DIR/ffmpeg/bin:$PATH"
-            echo -e "${GREEN}[OK]${NC} FFmpeg setup completed and added to PATH."
-        else
-            echo -e "${YELLOW}[WARNING] Automatic FFmpeg setup could not complete.${NC}"
-            echo -e "You can install it system-wide with: ${YELLOW}sudo apt install -y ffmpeg${NC}"
-        fi
+    if [ "$OS_TYPE" = "Darwin" ] && command -v brew >/dev/null 2>&1; then
+        echo -e "${CYAN}[INFO]${NC} macOS Homebrew detected. Installing FFmpeg via brew..."
+        brew install ffmpeg
     else
-        echo -e "${YELLOW}[WARNING] setup_ffmpeg.py not found.${NC}"
+        echo -e "${CYAN}[INFO]${NC} Starting automatic standalone FFmpeg setup..."
+        if [ -f "setup_ffmpeg.py" ]; then
+            python3 setup_ffmpeg.py
+            if [ $? -eq 0 ]; then
+                export PATH="$SCRIPT_DIR/ffmpeg/bin:$PATH"
+                echo -e "${GREEN}[OK]${NC} FFmpeg setup completed and added to PATH."
+            else
+                echo -e "${YELLOW}[WARNING] Automatic FFmpeg setup could not complete.${NC}"
+                if [ "$OS_TYPE" = "Darwin" ]; then
+                    echo -e "You can install it with Homebrew: ${YELLOW}brew install ffmpeg${NC}"
+                else
+                    echo -e "You can install it system-wide with: ${YELLOW}sudo apt install -y ffmpeg${NC}"
+                fi
+            fi
+        else
+            echo -e "${YELLOW}[WARNING] setup_ffmpeg.py not found.${NC}"
+        fi
     fi
 else
     FFMPEG_VER=$(ffmpeg -version 2>/dev/null | head -n 1)
