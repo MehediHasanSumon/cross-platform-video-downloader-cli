@@ -51,8 +51,8 @@ class PlatformDetector:
         elif any(d in url_lower for d in ["twitter.com", "x.com"]):
             return Platform(
                 key="twitter",
-                name="Twitter / X",
-                badge="[bold #121316 on #f3f4f6]  Twitter/X  [/]",
+                name="Twitter",
+                badge="[bold #121316 on #f3f4f6]  Twitter  [/]",
                 color="bright_cyan",
                 icon="🐦",
                 folder="Twitter",

@@ -20,7 +20,7 @@ SUPPORTED_PLATFORMS = [
     {"name": "Facebook", "badge_color": "#60a4fa", "fg": "#121316"},
     {"name": "Instagram", "badge_color": "#e778f9", "fg": "#121316"},
     {"name": "TikTok", "badge_color": "#27d2ed", "fg": "#121316"},
-    {"name": "Twitter/X", "badge_color": "#f3f4f6", "fg": "#121316"},
+    {"name": "Twitter", "badge_color": "#f3f4f6", "fg": "#121316"},
 ]
 
 # Format & Quality Profiles with typical bitrate / size factors for estimation

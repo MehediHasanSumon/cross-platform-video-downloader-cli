@@ -31,12 +31,12 @@ class BannerRenderer:
             f"[bold {Theme.TEXT_DARK} on #60a4fa] Facebook [/]  "
             f"[bold {Theme.TEXT_DARK} on #e778f9] Instagram [/]  "
             f"[bold {Theme.TEXT_DARK} on #27d2ed] TikTok [/]  "
-            f"[bold {Theme.TEXT_DARK} on #f3f4f6] Twitter/X [/]"
+            f"[bold {Theme.TEXT_DARK} on #f3f4f6] Twitter [/]  "
         )
 
         # 3. System Specs Line with colored indicator dots
         status_line = Text.from_markup(
-            f"[{Theme.PRIMARY}]●[/] [bold {Theme.TEXT_LIGHT}]Engine: yt-dlp[/]   "
+            f"[{Theme.PRIMARY}]●[/] [bold {Theme.TEXT_LIGHT}]Engine: YT-DLP[/]   "
             f"[{Theme.SUCCESS}]●[/] [bold {Theme.TEXT_LIGHT}]OS: {os_name}[/]   "
             f"[{Theme.ACCENT}]●[/] [bold {Theme.TEXT_LIGHT}]Version {VERSION}[/]"
         )
@@ -62,8 +62,6 @@ class BannerRenderer:
         """Displays the URL entry prompt with optional clipboard link suggestion."""
         if clipboard_candidate:
             short_url = clipboard_candidate if len(clipboard_candidate) <= 65 else clipboard_candidate[:62] + "..."
-            console.print(f"  [{Theme.SUCCESS}]📋 Found link in clipboard:[/] [bold {Theme.TEXT_LIGHT}]{short_url}[/]")
-            console.print(f"  [dim](Press Enter directly to use this link, or paste a new URL)[/dim]")
-
-        console.print(f"[bold {Theme.PRIMARY}]Enter Media URL (YouTube, Facebook, Reels, Shorts, etc.):[/bold {Theme.PRIMARY}]")
+            
+        console.print(f"[bold {Theme.PRIMARY}]Enter Video URL:[/bold {Theme.PRIMARY}]")
         console.print(f"[{Theme.MUTED}](Type 'q' to quit)[/{Theme.MUTED}]")
