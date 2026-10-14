@@ -2,6 +2,7 @@
 
 import os
 from typing import Optional, List, Dict, Any
+from core.config import CONCURRENT_FRAGMENTS, SOCKET_BUFFER_SIZE
 from core.logger import AppLogger, YtDlpLogger
 
 class YdlOptionsBuilder:
@@ -37,9 +38,10 @@ class YdlOptionsBuilder:
             "outtmpl": {"default": out_template},
             "windowsfilenames": True,
             "ignoreerrors": True,
-            "retries": 10,
-            "fragment_retries": 10,
-            "concurrent_fragment_downloads": 5,
+            "retries": 15,
+            "fragment_retries": 15,
+            "concurrent_fragment_downloads": CONCURRENT_FRAGMENTS,
+            "buffersize": SOCKET_BUFFER_SIZE,
             "progress_hooks": progress_hooks,
             "postprocessor_hooks": postprocessor_hooks,
             "post_hooks": post_hooks,

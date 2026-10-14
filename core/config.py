@@ -14,6 +14,10 @@ DEFAULT_DOWNLOAD_DIR = os.path.join(ROOT_DIR, "downloads")
 LOG_FILE = os.path.join(ROOT_DIR, "youtube_downloader.log")
 COOKIES_FILE = os.path.join(ROOT_DIR, "cookies.txt")
 
+# Network & Concurrency Optimization (Aggressive Multi-threaded Connection Flooding)
+CONCURRENT_FRAGMENTS = 8
+SOCKET_BUFFER_SIZE = 1024 * 64  # 64 KB socket buffer for maximized packet throughput
+
 # Supported Platform Ribbon Configuration
 SUPPORTED_PLATFORMS = [
     {"name": "YouTube", "badge_color": "#f87070", "fg": "#121316"},

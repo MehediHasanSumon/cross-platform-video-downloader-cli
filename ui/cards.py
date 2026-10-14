@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich import box
 from core.models import MediaInfo, FormatOption, DownloadResult
 from core.sanitizer import Sanitizer
+from core.config import CONCURRENT_FRAGMENTS
 from ui.theme import Theme
 
 class CardRenderer:
@@ -77,6 +78,7 @@ class CardRenderer:
 
         table.add_row("Smart Resume:", f"[{Theme.SUCCESS}]Active (.part files auto-resume)[/]")
         table.add_row("Disk Check:", f"[{Theme.SUCCESS}]Active (Existing files > 1KB skipped)[/]")
+        table.add_row("Turbo Bandwidth:", f"[bold {Theme.SUCCESS}]Active ({CONCURRENT_FRAGMENTS} Multi-Threaded TCP Connections)[/]")
 
         panel = Panel(
             table,
