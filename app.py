@@ -35,6 +35,7 @@ class MediaDownloaderApp:
         self.console = Console(highlight=False)
         self.logger = AppLogger.get_logger()
         self.downloader = MediaDownloader(self.console)
+        self.cookies_browser: Optional[str] = None
 
     def _ensure_ffmpeg_path(self):
         """Adds bundled ffmpeg/bin to PATH if present locally."""
