@@ -1,5 +1,6 @@
 """Visual card components for media info, pre-flight summary, and completion."""
 
+import os
 from typing import Optional, List, Dict, Any
 from rich.console import Console
 from rich.table import Table
