@@ -113,6 +113,19 @@ class MediaDownloader:
         failed_files: List[str] = []
         processed_count = 0
         total_videos = media.playlist_count if media.is_playlist else 1
+        if media.is_playlist and media.playlist_items_range:
+            rng = media.playlist_items_range.strip()
+            if "-" in rng:
+                parts = rng.split("-")
+                try:
+                    start_i = int(parts[0]) if parts[0] else 1
+                    end_i = int(parts[1]) if parts[1] else (media.playlist_count or 1)
+                    if end_i >= start_i:
+                        total_videos = end_i - start_i + 1
+                except Exception:
+                    pass
+            elif "," in rng:
+                total_videos = len([p for p in rng.split(",") if p.strip()])
         actual_destination_dir: Optional[str] = None
 
         def on_skip_callback(fname: str, fsize: str, fpath: str):

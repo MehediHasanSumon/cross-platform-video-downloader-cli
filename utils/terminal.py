@@ -33,14 +33,13 @@ def clear_terminal():
 
 atexit.register(cleanup_terminal)
 
-def _sigint_handler(sig, frame):
+def _sigterm_handler(sig, frame):
     cleanup_terminal()
     sys.exit(0)
 
 try:
-    signal.signal(signal.SIGINT, _sigint_handler)
     if hasattr(signal, "SIGTERM"):
-        signal.signal(signal.SIGTERM, _sigint_handler)
+        signal.signal(signal.SIGTERM, _sigterm_handler)
 except Exception:
     pass
 

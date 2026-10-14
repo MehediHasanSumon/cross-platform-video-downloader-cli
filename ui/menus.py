@@ -97,10 +97,7 @@ class MenuRenderer:
                         break
                     elif key in ("ENTER", "SPACE"):
                         break
-                    elif key in ("ESC", "q", "Q"):
-                        selected = 0
-                        break
-                    elif key == "CTRL_C":
+                    elif key in ("ESC", "q", "Q", "CTRL_C"):
                         raise KeyboardInterrupt
         finally:
             sys.stdout.write("\033[?25h")
@@ -167,10 +164,7 @@ class MenuRenderer:
                             break
                         elif key in ("ENTER", "SPACE"):
                             break
-                        elif key in ("ESC", "q", "Q"):
-                            selected = 0
-                            break
-                        elif key == "CTRL_C":
+                        elif key in ("ESC", "q", "Q", "CTRL_C"):
                             raise KeyboardInterrupt
             finally:
                 sys.stdout.write("\033[?25h")

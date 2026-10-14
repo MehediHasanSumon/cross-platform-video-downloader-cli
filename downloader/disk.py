@@ -15,6 +15,9 @@ class SmartDiskChecker:
             valid_exts = {".mp4", ".mkv", ".webm", ".avi", ".mov", ".ts"}
 
         def disk_check_filter(info_dict, *, incomplete=False):
+            if info_dict.get("_type") == "playlist":
+                return None
+
             try:
                 target = ydl.prepare_filename(info_dict)
                 dir_name = os.path.dirname(target)

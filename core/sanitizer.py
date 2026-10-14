@@ -101,6 +101,6 @@ class Sanitizer:
 
         # Enforce cross-platform safe filename length
         if len(cleaned.encode("utf-8", errors="ignore")) > 180:
-            cleaned = cleaned[:60] + "..."
+            cleaned = cleaned[:140] + "..."
 
         return cleaned or "Media_Download"
