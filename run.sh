@@ -143,9 +143,9 @@ echo -e "${CYAN}===================================================${NC}"
 echo -e "${BOLD}               Starting Downloader                 ${NC}"
 echo -e "${CYAN}===================================================${NC}"
 
-# Brief pause so user sees all checks passed, then clear screen for clean UI
+# Brief pause so user sees all checks passed, then wipe screen and scrollback buffer for clean UI
 sleep 1
-clear
+printf '\033[H\033[2J\033[3J'
 
 if [ -f "main.py" ]; then
     python3 main.py "$@"
