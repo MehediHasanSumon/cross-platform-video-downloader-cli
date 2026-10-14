@@ -36,7 +36,6 @@ class YdlOptionsBuilder:
         ydl_opts: Dict[str, Any] = {
             "outtmpl": {"default": out_template},
             "windowsfilenames": True,
-            "trim_file_name": 100,
             "ignoreerrors": True,
             "retries": 10,
             "fragment_retries": 10,

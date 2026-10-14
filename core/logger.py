@@ -56,8 +56,10 @@ class YtDlpLogger:
         self.logger.error(msg)
 
 
-def view_recent_logs(console: Console, lines: int = 25):
+def view_recent_logs(console: Console, lines: int = 25, max_lines: int = None):
     """Displays recent log entries from the log file in a clean Rich panel."""
+    if max_lines is not None:
+        lines = max_lines
     if not os.path.isfile(LOG_FILE):
         console.print(f"  [dim yellow]No log file found at {LOG_FILE}[/dim yellow]\n")
         return
