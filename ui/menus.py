@@ -111,10 +111,12 @@ class MenuRenderer:
         return selected
 
     @staticmethod
-    def select_playlist_mode(console: Console, media: MediaInfo) -> bool:
-        """Prompts user whether to download the entire playlist or only the single targeted video."""
+    def select_playlist_mode(console: Console, media: MediaInfo) -> tuple[bool, Optional[str]]:
+        """Prompts user whether to download the entire playlist, a custom range, or only the single targeted video."""
+        count_str = f"{media.playlist_count} videos" if media.playlist_count else "All videos"
         options = [
-            f"Download Entire Playlist ({media.playlist_count or 'All'} videos)",
+            f"Download Entire Playlist ({count_str})",
+            "Download Specific Range (e.g. 1-10, 5-20)",
             "Download Only This Single Video",
         ]
 
@@ -134,7 +136,7 @@ class MenuRenderer:
             return Panel(
                 table,
                 title=f"[bold {Theme.PRIMARY}] Playlist Selection [/]",
-                subtitle="[dim]Use Up/Down arrows or 1/2, Enter to confirm[/dim]",
+                subtitle="[dim]Use Up/Down arrows or 1/2/3, Enter to confirm[/dim]",
                 border_style=Theme.BORDER,
                 box=box.ROUNDED,
                 padding=(1, 2),
@@ -142,37 +144,63 @@ class MenuRenderer:
 
         if not sys.stdin.isatty():
             console.print(get_panel(0))
-            choice = Prompt.ask("  Choose mode", choices=["1", "2"], default="1")
-            return choice == "1"
-
-        selected = 0
-        sys.stdout.write("\033[?25l")
-        sys.stdout.flush()
-
-        try:
-            with Live(get_panel(selected), console=console, auto_refresh=False) as live:
-                while True:
-                    key = read_key()
-                    if key in ("UP", "DOWN", "k", "j", "w", "s"):
-                        selected = 1 - selected
-                        live.update(get_panel(selected), refresh=True)
-                    elif key in ("1", "2"):
-                        selected = int(key) - 1
-                        live.update(get_panel(selected), refresh=True)
-                        break
-                    elif key in ("ENTER", "SPACE"):
-                        break
-                    elif key in ("ESC", "q", "Q"):
-                        selected = 0
-                        break
-                    elif key == "CTRL_C":
-                        raise KeyboardInterrupt
-        finally:
-            sys.stdout.write("\033[?25h")
+            choice = Prompt.ask("  Choose mode", choices=["1", "2", "3"], default="1")
+            selected = int(choice) - 1
+        else:
+            selected = 0
+            sys.stdout.write("\033[?25l")
             sys.stdout.flush()
 
+            try:
+                with Live(get_panel(selected), console=console, auto_refresh=False) as live:
+                    while True:
+                        key = read_key()
+                        if key in ("UP", "k", "w"):
+                            selected = (selected - 1) % len(options)
+                            live.update(get_panel(selected), refresh=True)
+                        elif key in ("DOWN", "j", "s"):
+                            selected = (selected + 1) % len(options)
+                            live.update(get_panel(selected), refresh=True)
+                        elif key in ("1", "2", "3"):
+                            selected = int(key) - 1
+                            live.update(get_panel(selected), refresh=True)
+                            break
+                        elif key in ("ENTER", "SPACE"):
+                            break
+                        elif key in ("ESC", "q", "Q"):
+                            selected = 0
+                            break
+                        elif key == "CTRL_C":
+                            raise KeyboardInterrupt
+            finally:
+                sys.stdout.write("\033[?25h")
+                sys.stdout.flush()
+
         console.print(f"  [bold {Theme.SUCCESS}]✓ Mode:[/] [bold {Theme.TEXT_LIGHT}]{options[selected]}[/]\n")
-        return selected == 0
+
+        if selected == 0:
+            return True, None
+        elif selected == 1:
+            range_val = Prompt.ask("  Enter video range [dim](e.g. 1-10, 5-15, or Enter for all)[/dim]", default="")
+            clean_range = range_val.strip()
+            if clean_range and clean_range.lower() not in ("all", "a", "*"):
+                console.print(f"  [bold {Theme.SUCCESS}]✓ Range Selected:[/] [bold {Theme.TEXT_LIGHT}]Items {clean_range}[/]\n")
+                return True, clean_range
+            return True, None
+        else:
+            return False, None
+
+    @staticmethod
+    def prompt_playlist_range(console: Console, media: MediaInfo) -> Optional[str]:
+        """Optionally prompts user for a custom video range in a pure playlist."""
+        count_str = f"{media.playlist_count} videos" if media.playlist_count else "available videos"
+        console.print(f"  [{Theme.MUTED}]Download all {count_str}, or specify a custom range?[/]")
+        range_input = Prompt.ask("  Playlist Range [dim](press Enter for All, or e.g. 1-10)[/dim]", default="")
+        cleaned = range_input.strip()
+        if cleaned and cleaned.lower() not in ("all", "a", "*"):
+            console.print(f"  [bold {Theme.SUCCESS}]✓ Target Range:[/] [bold {Theme.TEXT_LIGHT}]Videos {cleaned}[/]\n")
+            return cleaned
+        return None
 
     @staticmethod
     def render_post_download_table(selected_index: int) -> Panel:

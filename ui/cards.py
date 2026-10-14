@@ -61,10 +61,19 @@ class CardRenderer:
         table.add_row("Codec:", f"[dim]{format_option.codec}[/dim]")
         est_size = format_option.estimated_size_str(media.duration)
         table.add_row("Est. Size:", f"[{Theme.SUCCESS}]{est_size}[/]")
-        table.add_row("Destination:", f"[{Theme.PRIMARY}]{dest_path}[/]")
 
         if media.is_playlist:
-            table.add_row("Playlist Items:", f"[{Theme.ACCENT}]{media.playlist_count or 'Multiple'} items[/]")
+            clean_folder = Sanitizer.clean_media_title({"title": media.title}, "generic")
+            playlist_dest = os.path.join(dest_path, clean_folder)
+            table.add_row("Destination:", f"[{Theme.PRIMARY}]{playlist_dest}[/]")
+            count_info = f"{media.playlist_count} items" if media.playlist_count else "Multiple items"
+            if media.playlist_items_range:
+                count_info += f" [bold {Theme.WARNING}](Range: {media.playlist_items_range})[/]"
+            table.add_row("Playlist Items:", f"[{Theme.ACCENT}]{count_info}[/]")
+            table.add_row("Serial Format:", f"[{Theme.SUCCESS}]01. Title.ext, 02. Title.ext ...[/]")
+        else:
+            table.add_row("Destination:", f"[{Theme.PRIMARY}]{dest_path}[/]")
+
         table.add_row("Smart Resume:", f"[{Theme.SUCCESS}]Active (.part files auto-resume)[/]")
         table.add_row("Disk Check:", f"[{Theme.SUCCESS}]Active (Existing files > 1KB skipped)[/]")
 
@@ -83,6 +92,7 @@ class CardRenderer:
         """Renders download summary upon completion."""
         num_completed = len(result.completed_files)
         num_skipped = len(result.skipped_files)
+        num_failed = len(result.failed_files)
         elapsed_str = Sanitizer.format_duration(result.elapsed_seconds)
 
         table = Table.grid(padding=(0, 2))
@@ -94,10 +104,12 @@ class CardRenderer:
         table.add_row("Saved In:", f"[{Theme.PRIMARY}]{result.destination_path}[/]")
         table.add_row("Elapsed Time:", f"[{Theme.MUTED}]{elapsed_str}[/]")
 
-        if result.is_playlist or (num_completed + num_skipped > 1):
+        if result.is_playlist or (num_completed + num_skipped + num_failed > 1):
             table.add_row("New Downloads:", f"[bold {Theme.SUCCESS}]{num_completed}[/] files")
             table.add_row("Skipped Existing:", f"[bold {Theme.WARNING}]{num_skipped}[/] files")
-            table.add_row("Total Processed:", f"[bold {Theme.PRIMARY}]{num_completed + num_skipped}[/] items")
+            if num_failed > 0:
+                table.add_row("Failed/Unavailable:", f"[bold {Theme.DANGER}]{num_failed}[/] files")
+            table.add_row("Total Processed:", f"[bold {Theme.PRIMARY}]{num_completed + num_skipped + num_failed}[/] items")
 
         panel = Panel(
             table,

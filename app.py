@@ -132,9 +132,23 @@ class MediaDownloaderApp:
         # Step 2: Handle playlist detection for YouTube
         playlist_id = Sanitizer.extract_playlist_id(url)
         if playlist_id and ("v=" in url or "youtu.be/" in url):
-            is_full_playlist = MenuRenderer.select_playlist_mode(self.console, media)
+            is_full_playlist, playlist_range = MenuRenderer.select_playlist_mode(self.console, media)
             media.is_playlist = is_full_playlist
-            self.logger.info(f"Playlist mode selection: is_full_playlist={is_full_playlist}")
+            media.playlist_items_range = playlist_range
+            if is_full_playlist:
+                media.url = f"https://www.youtube.com/playlist?list={playlist_id}"
+                # Refresh media info for the full playlist to obtain accurate title & video count
+                playlist_info = self.downloader.fetch_media_info(media.url, cookies_from_browser=self.cookies_browser)
+                if playlist_info:
+                    media.title = playlist_info.title
+                    media.playlist_count = playlist_info.playlist_count
+                    media.duration = playlist_info.duration
+                    media.raw_info = playlist_info.raw_info
+            self.logger.info(f"Playlist mode selection: is_full_playlist={is_full_playlist}, range={playlist_range}")
+        elif media.is_playlist:
+            # Pure playlist link was provided
+            playlist_range = MenuRenderer.prompt_playlist_range(self.console, media)
+            media.playlist_items_range = playlist_range
 
         # Step 3: Interactive quality selection with estimated file sizes
         profiles = self.get_format_options(platform.key)
@@ -164,25 +178,39 @@ class MediaDownloaderApp:
             media=media,
             save_path=dest_folder,
             format_choice=selected_format_idx,
+            cookies_from_browser=self.cookies_browser,
         )
 
         # Step 7: Success Dashboard
         CardRenderer.render_success_card(self.console, result)
 
         # Step 8: Interactive Post-Download Action Menu with hotkeys
-        last_file_path = os.path.join(dest_folder, result.completed_files[0]) if result.completed_files else None
+        target_dir = result.destination_path or dest_folder
+        playable_file = None
+        candidate_files = result.completed_files + result.skipped_files
+        for cand in candidate_files:
+            cand_path = os.path.join(target_dir, cand)
+            if os.path.isfile(cand_path):
+                playable_file = cand_path
+                break
+
+        if not playable_file and os.path.isdir(target_dir):
+            for f in sorted(os.listdir(target_dir)):
+                if any(f.endswith(ext) for ext in (".mp4", ".mkv", ".webm", ".mp3", ".m4a")):
+                    playable_file = os.path.join(target_dir, f)
+                    break
 
         while True:
             action_idx = MenuRenderer.interactive_post_download_menu(self.console, default_index=0)
             if action_idx == 0:  # Download another
                 break
             elif action_idx == 1:  # Open folder
-                SystemUtils.open_folder(dest_folder)
+                SystemUtils.open_folder(target_dir)
             elif action_idx == 2:  # Play media
-                if last_file_path and os.path.isfile(last_file_path):
-                    SystemUtils.play_media(last_file_path)
+                if playable_file and os.path.isfile(playable_file):
+                    SystemUtils.play_media(playable_file)
                 else:
-                    SystemUtils.open_folder(dest_folder)
+                    SystemUtils.open_folder(target_dir)
             elif action_idx == 3:  # View logs
                 view_recent_logs(self.console)
                 Prompt.ask("  Press Enter to return...")

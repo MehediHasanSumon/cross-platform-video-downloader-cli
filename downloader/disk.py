@@ -34,12 +34,13 @@ class SmartDiskChecker:
                         return f"Skipping '{fname}': already exists on disk"
 
                 # 2. Numbered index prefix match for playlist videos
-                index = info_dict.get("playlist_index")
+                index = info_dict.get("playlist_index") or info_dict.get("playlist_autonumber")
                 if is_playlist and index is not None:
                     try:
-                        prefix = f"{int(index):02d} - "
+                        idx_num = int(index)
+                        prefixes = (f"{idx_num:02d}. ", f"{idx_num:02d} - ", f"{idx_num}. ")
                         for f in os.listdir(dir_name):
-                            if f.startswith(prefix) and any(f.endswith(e) for e in valid_exts):
+                            if any(f.startswith(p) for p in prefixes) and any(f.endswith(e) for e in valid_exts):
                                 full = os.path.join(dir_name, f)
                                 if os.path.isfile(full) and os.path.getsize(full) > 1024 and not f.endswith(".part") and not f.endswith(".ytdl"):
                                     fsize = Sanitizer.format_file_size(os.path.getsize(full))

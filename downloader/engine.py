@@ -38,6 +38,7 @@ class MediaDownloader:
             "quiet": True,
             "no_warnings": True,
             "skip_download": True,
+            "logger": YtDlpLogger(self.logger),
         }
         if os.path.isfile(COOKIES_FILE):
             ydl_opts["cookiefile"] = COOKIES_FILE
@@ -109,13 +110,17 @@ class MediaDownloader:
         stream_task_id = None
         completed_files: List[str] = []
         skipped_files: List[str] = []
+        failed_files: List[str] = []
         processed_count = 0
         total_videos = media.playlist_count if media.is_playlist else 1
+        actual_destination_dir: Optional[str] = None
 
         def on_skip_callback(fname: str, fsize: str, fpath: str):
-            nonlocal processed_count
+            nonlocal processed_count, actual_destination_dir
             processed_count += 1
             skipped_files.append(fname)
+            if fpath:
+                actual_destination_dir = os.path.dirname(fpath)
             self.logger.info(f"[SKIPPED] Already exists: '{fname}' ({fsize}) at '{fpath}'")
 
             if media.is_playlist and total_videos and total_videos > 1:
@@ -130,11 +135,13 @@ class MediaDownloader:
                 )
 
         def post_hook_callback(filepath: str):
-            nonlocal stream_task_id, processed_count
+            nonlocal stream_task_id, processed_count, actual_destination_dir
             processed_count += 1
             fname = os.path.basename(filepath) if filepath else "Media"
             fsize = Sanitizer.format_file_size(os.path.getsize(filepath)) if filepath and os.path.isfile(filepath) else "Completed"
             completed_files.append(fname)
+            if filepath:
+                actual_destination_dir = os.path.dirname(filepath)
             self.logger.info(f"[COMPLETED] Download finished: '{fname}' | Size: {fsize} | Path: '{filepath}'")
 
             if stream_task_id is not None:
@@ -210,6 +217,8 @@ class MediaDownloader:
             platform_key=media.platform.key,
             cookies_file=COOKIES_FILE if os.path.isfile(COOKIES_FILE) else None,
             cookies_from_browser=cookies_from_browser,
+            playlist_title=media.title if media.is_playlist else None,
+            playlist_items=media.playlist_items_range if media.is_playlist else None,
         )
 
         with progress:
@@ -226,9 +235,38 @@ class MediaDownloader:
                     is_playlist=media.is_playlist,
                     on_skip=on_skip_callback,
                 )
-                ydl.download([media.url])
+                try:
+                    ydl.download([media.url])
+                except Exception as dl_err:
+                    self.logger.warning(f"Download execution encountered warning/error: {dl_err}")
 
         elapsed_sec = int(time.time() - start_time)
+
+        # Determine target final directory for playlist
+        final_dir = actual_destination_dir
+        if not final_dir:
+            if media.is_playlist:
+                clean_folder = Sanitizer.clean_media_title({"title": media.title}, "generic")
+                final_dir = os.path.join(save_path, clean_folder)
+            else:
+                final_dir = save_path
+
+        # Generate M3U playlist file for audio playlists (format 3: MP3, format 4: M4A)
+        if media.is_playlist and format_choice in (3, 4) and os.path.isdir(final_dir):
+            try:
+                audio_files = sorted([
+                    f for f in os.listdir(final_dir)
+                    if f.endswith((".mp3", ".m4a", ".opus", ".aac", ".flac", ".wav"))
+                ])
+                if audio_files:
+                    m3u_file = os.path.join(final_dir, f"{Sanitizer.clean_media_title({'title': media.title}, 'generic')}.m3u")
+                    with open(m3u_file, "w", encoding="utf-8") as m3u:
+                        m3u.write("#EXTM3U\n")
+                        for af in audio_files:
+                            m3u.write(f"{af}\n")
+                    self.logger.info(f"Generated M3U playlist file at: {m3u_file}")
+            except Exception as m3u_err:
+                self.logger.warning(f"Could not write M3U playlist: {m3u_err}")
 
         # Trigger desktop system notification upon completion
         NotificationManager.notify(
@@ -238,10 +276,11 @@ class MediaDownloader:
 
         return DownloadResult(
             title=media.title,
-            destination_path=save_path,
+            destination_path=final_dir,
             elapsed_seconds=elapsed_sec,
             is_playlist=media.is_playlist,
             completed_files=completed_files,
             skipped_files=skipped_files,
+            failed_files=failed_files,
             success=True,
         )

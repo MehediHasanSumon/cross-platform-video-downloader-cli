@@ -43,6 +43,7 @@ class MediaInfo:
     views: Optional[int] = None
     uploader: str = "Unknown"
     playlist_count: Optional[int] = None
+    playlist_items_range: Optional[str] = None
     raw_info: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
@@ -53,5 +54,6 @@ class DownloadResult:
     is_playlist: bool = False
     completed_files: List[str] = field(default_factory=list)
     skipped_files: List[str] = field(default_factory=list)
+    failed_files: List[str] = field(default_factory=list)
     success: bool = True
     error_message: Optional[str] = None
