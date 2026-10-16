@@ -1,17 +1,20 @@
 """Application logging configuration and log viewer."""
 
 import os
+import re
 import logging
 from logging.handlers import RotatingFileHandler
+from typing import Optional, List
 from rich.console import Console
 from rich.panel import Panel
+from rich.text import Text
 from rich import box
 from core.config import LOG_FILE
 
 class AppLogger:
     """Manages rotating application logging to disk and debug streams."""
 
-    _instance: logging.Logger = None
+    _instance: Optional[logging.Logger] = None
 
     @classmethod
     def get_logger(cls) -> logging.Logger:
@@ -35,9 +38,6 @@ class AppLogger:
             cls._instance = logger
         return cls._instance
 
-
-import re
-from typing import List
 
 class YtDlpLogger:
     """Custom logger routing yt-dlp internal messages to the rotating file logger."""
@@ -63,7 +63,7 @@ class YtDlpLogger:
         self.logger.error(msg)
 
 
-def view_recent_logs(console: Console, lines: int = 25, max_lines: int = None):
+def view_recent_logs(console: Console, lines: int = 25, max_lines: Optional[int] = None):
     """Displays recent log entries from the log file in a clean Rich panel."""
     if max_lines is not None:
         lines = max_lines
@@ -78,8 +78,10 @@ def view_recent_logs(console: Console, lines: int = 25, max_lines: int = None):
         recent = all_lines[-lines:] if len(all_lines) > lines else all_lines
         log_text = "".join(recent).strip()
 
+        body = Text.from_ansi(log_text) if log_text else Text.from_markup("[dim]Log file is currently empty[/dim]")
+
         panel = Panel(
-            log_text if log_text else "[dim]Log file is currently empty[/dim]",
+            body,
             title=f"[bold #27d2ed] Recent Logs ({os.path.basename(LOG_FILE)}) [/bold #27d2ed]",
             subtitle=f"[dim]Showing last {len(recent)} entries • Location: {LOG_FILE}[/dim]",
             border_style="#27d2ed",

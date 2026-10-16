@@ -7,6 +7,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.live import Live
 from rich.prompt import Prompt
+from rich.markup import escape
 from rich import box
 from core.models import FormatOption, MediaInfo
 from core.config import POST_DOWNLOAD_ACTIONS
@@ -54,7 +55,7 @@ class MenuRenderer:
 
         return Panel(
             table,
-            title=f"[bold {Theme.PRIMARY}] Select Quality & Format ({platform_name}) [/]",
+            title=f"[bold {Theme.PRIMARY}] Select Quality & Format ({escape(platform_name)}) [/]",
             subtitle="[dim]Use Up/Down arrows or keys 1-5, Enter to confirm[/dim]",
             border_style=Theme.BORDER,
             box=box.ROUNDED,
@@ -178,7 +179,7 @@ class MenuRenderer:
             range_val = Prompt.ask("  Enter video range [dim](e.g. 1-10, 5-15, or Enter for all)[/dim]", default="")
             clean_range = range_val.strip()
             if clean_range and clean_range.lower() not in ("all", "a", "*"):
-                console.print(f"  [bold {Theme.SUCCESS}]✓ Range Selected:[/] [bold {Theme.TEXT_LIGHT}]Items {clean_range}[/]\n")
+                console.print(f"  [bold {Theme.SUCCESS}]✓ Range Selected:[/] [bold {Theme.TEXT_LIGHT}]Items {escape(clean_range)}[/]\n")
                 return True, clean_range
             return True, None
         else:
@@ -192,7 +193,7 @@ class MenuRenderer:
         range_input = Prompt.ask("  Playlist Range [dim](press Enter for All, or e.g. 1-10)[/dim]", default="")
         cleaned = range_input.strip()
         if cleaned and cleaned.lower() not in ("all", "a", "*"):
-            console.print(f"  [bold {Theme.SUCCESS}]✓ Target Range:[/] [bold {Theme.TEXT_LIGHT}]Videos {cleaned}[/]\n")
+            console.print(f"  [bold {Theme.SUCCESS}]✓ Target Range:[/] [bold {Theme.TEXT_LIGHT}]Videos {escape(cleaned)}[/]\n")
             return cleaned
         return None
 

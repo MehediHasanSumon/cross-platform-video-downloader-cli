@@ -1,9 +1,18 @@
 """Factory for yt-dlp parameter dictionaries."""
 
 import os
+import shutil
 from typing import Optional, List, Dict, Any
 from core.config import CONCURRENT_FRAGMENTS, SOCKET_BUFFER_SIZE
 from core.logger import AppLogger, YtDlpLogger
+
+def get_available_js_runtimes() -> Dict[str, Dict[str, Any]]:
+    """Detects available system JavaScript runtimes for yt-dlp challenge solving."""
+    runtimes: Dict[str, Dict[str, Any]] = {}
+    for rt in ("node", "deno", "bun", "quickjs"):
+        if shutil.which(rt):
+            runtimes[rt] = {}
+    return runtimes
 
 class YdlOptionsBuilder:
     """Constructs tailored yt-dlp configuration dictionaries."""
@@ -55,6 +64,12 @@ class YdlOptionsBuilder:
             "quiet": True,
             "no_warnings": True,
         }
+
+        # Auto-configure JS runtimes if installed (fixes YouTube JS challenge solver warnings)
+        js_runtimes = get_available_js_runtimes()
+        if js_runtimes:
+            ydl_opts["js_runtimes"] = js_runtimes
+            ydl_opts["remote_components"] = ["ejs:github"]
 
         if is_playlist and playlist_items:
             ydl_opts["playlist_items"] = str(playlist_items).strip()

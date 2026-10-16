@@ -83,6 +83,8 @@ def read_key() -> str:
                 return "ENTER"
             elif key == b' ':
                 return "SPACE"
+            elif key == b'\x08':
+                return "BACKSPACE"
             elif key == b'\x03':
                 return "CTRL_C"
             else:
@@ -126,6 +128,8 @@ def read_key() -> str:
                     return "ENTER"
                 elif ch == b' ':
                     return "SPACE"
+                elif ch in (b'\x7f', b'\x08'):
+                    return "BACKSPACE"
                 elif ch == b'\x03':
                     return "CTRL_C"
                 else:

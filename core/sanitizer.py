@@ -8,15 +8,17 @@ class Sanitizer:
 
     @staticmethod
     def format_duration(seconds: Any) -> str:
-        if not seconds:
+        if seconds is None:
             return "Unknown"
         try:
             total_sec = int(round(float(seconds)))
         except (ValueError, TypeError):
             return "Unknown"
 
-        if total_sec <= 0:
+        if total_sec < 0:
             return "Unknown"
+        if total_sec == 0:
+            return "00:00"
 
         hours = total_sec // 3600
         minutes = (total_sec % 3600) // 60
@@ -60,7 +62,11 @@ class Sanitizer:
             parsed = urllib.parse.urlparse(url)
             qs = urllib.parse.parse_qs(parsed.query)
             if "list" in qs and qs["list"]:
-                return qs["list"][0]
+                playlist_id = qs["list"][0].strip()
+                # Exclude YouTube dynamic radio mix / algorithmic recommendation queues
+                if any(playlist_id.startswith(p) for p in ("RD", "UL", "LL", "WL")):
+                    return None
+                return playlist_id
         except Exception:
             pass
         return None

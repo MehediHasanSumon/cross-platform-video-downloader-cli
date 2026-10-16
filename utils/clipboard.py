@@ -11,7 +11,7 @@ class ClipboardHelper:
     @staticmethod
     def get_clipboard_text() -> Optional[str]:
         # 1. Try Wayland wl-paste on Linux
-        if sys.platform != "win32" and shutil.which("wl-paste"):
+        if sys.platform.startswith("linux") and shutil.which("wl-paste"):
             try:
                 res = subprocess.run(
                     ["wl-paste", "--no-newline"],
@@ -25,20 +25,8 @@ class ClipboardHelper:
             except Exception:
                 pass
 
-        # 2. Try Tkinter (Standard library, works on Windows/macOS/Linux)
-        try:
-            import tkinter
-            root = tkinter.Tk()
-            root.withdraw()
-            text = root.clipboard_get()
-            root.destroy()
-            if text:
-                return text.strip()
-        except Exception:
-            pass
-
-        # 3. Try xclip on Linux (X11)
-        if sys.platform != "win32" and shutil.which("xclip"):
+        # 2. Try xclip on Linux (X11)
+        if sys.platform.startswith("linux") and shutil.which("xclip"):
             try:
                 res = subprocess.run(
                     ["xclip", "-selection", "clipboard", "-o"],
@@ -52,12 +40,56 @@ class ClipboardHelper:
             except Exception:
                 pass
 
-        # 4. Try pyperclip if installed
+        # 3. Try xsel on Linux (X11)
+        if sys.platform.startswith("linux") and shutil.which("xsel"):
+            try:
+                res = subprocess.run(
+                    ["xsel", "--clipboard", "--output"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                    timeout=0.2,
+                )
+                if res.returncode == 0 and res.stdout:
+                    return res.stdout.strip()
+            except Exception:
+                pass
+
+        # 4. Try macOS pbpaste
+        if sys.platform == "darwin" and shutil.which("pbpaste"):
+            try:
+                res = subprocess.run(
+                    ["pbpaste"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                    timeout=0.2,
+                )
+                if res.returncode == 0 and res.stdout:
+                    return res.stdout.strip()
+            except Exception:
+                pass
+
+        # 5. Try pyperclip if available
         try:
             import pyperclip
             val = pyperclip.paste()
             if val:
                 return val.strip()
+        except Exception:
+            pass
+
+        # 6. Safe Tkinter fallback with guaranteed resource cleanup
+        try:
+            import tkinter
+            root = tkinter.Tk()
+            try:
+                root.withdraw()
+                text = root.clipboard_get()
+                if text:
+                    return str(text).strip()
+            finally:
+                root.destroy()
         except Exception:
             pass
 

@@ -5,6 +5,7 @@ from typing import Optional, List, Dict, Any
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+from rich.markup import escape
 from rich import box
 from core.models import MediaInfo, FormatOption, DownloadResult
 from core.sanitizer import Sanitizer
@@ -22,8 +23,8 @@ class CardRenderer:
         table.add_column("Value", style="white")
 
         table.add_row("Platform:", media.platform.badge)
-        table.add_row("Title:", f"[bold {Theme.TEXT_LIGHT}]{media.title}[/]")
-        table.add_row("Author / Page:", f"[{Theme.WARNING}]{media.uploader}[/]")
+        table.add_row("Title:", f"[bold {Theme.TEXT_LIGHT}]{escape(media.title)}[/]")
+        table.add_row("Author / Page:", f"[{Theme.WARNING}]{escape(media.uploader)}[/]")
 
         if media.is_playlist:
             count = media.playlist_count or "Multiple"
@@ -37,7 +38,7 @@ class CardRenderer:
             table.add_row("Content:", f"[bold {Theme.PRIMARY}]{media.platform.name} Media[/]")
 
         source_display = media.url if len(media.url) <= 65 else media.url[:62] + "..."
-        table.add_row("Source URL:", f"[dim]{source_display}[/dim]")
+        table.add_row("Source URL:", f"[dim]{escape(source_display)}[/dim]")
 
         panel = Panel(
             table,
@@ -58,7 +59,7 @@ class CardRenderer:
         table.add_column("Value", style="white")
 
         table.add_row("Platform:", media.platform.badge)
-        table.add_row("Target:", f"[bold {Theme.TEXT_LIGHT}]{media.title}[/]")
+        table.add_row("Target:", f"[bold {Theme.TEXT_LIGHT}]{escape(media.title)}[/]")
         table.add_row("Quality:", f"[{Theme.WARNING}]{format_option.name}[/] [{Theme.PRIMARY}]({format_option.badge})[/]")
         table.add_row("Codec:", f"[dim]{format_option.codec}[/dim]")
         est_size = format_option.estimated_size_str(media.duration)
@@ -67,14 +68,14 @@ class CardRenderer:
         if media.is_playlist:
             clean_folder = Sanitizer.clean_media_title({"title": media.title}, "generic")
             playlist_dest = os.path.join(dest_path, clean_folder)
-            table.add_row("Destination:", f"[{Theme.PRIMARY}]{playlist_dest}[/]")
+            table.add_row("Destination:", f"[{Theme.PRIMARY}]{escape(playlist_dest)}[/]")
             count_info = f"{media.playlist_count} items" if media.playlist_count else "Multiple items"
             if media.playlist_items_range:
                 count_info += f" [bold {Theme.WARNING}](Range: {media.playlist_items_range})[/]"
             table.add_row("Playlist Items:", f"[{Theme.ACCENT}]{count_info}[/]")
             table.add_row("Serial Format:", f"[{Theme.SUCCESS}]01. Title.ext, 02. Title.ext ...[/]")
         else:
-            table.add_row("Destination:", f"[{Theme.PRIMARY}]{dest_path}[/]")
+            table.add_row("Destination:", f"[{Theme.PRIMARY}]{escape(dest_path)}[/]")
 
         table.add_row("Smart Resume:", f"[{Theme.SUCCESS}]Active (.part files auto-resume)[/]")
         table.add_row("Disk Check:", f"[{Theme.SUCCESS}]Active (Existing files > 1KB skipped)[/]")
@@ -103,8 +104,8 @@ class CardRenderer:
         table.add_column("Value", style="white")
 
         table.add_row("Status:", f"[bold {Theme.SUCCESS}]✓ Download Complete[/]")
-        table.add_row("Media Title:", f"[bold {Theme.TEXT_LIGHT}]{result.title}[/]")
-        table.add_row("Saved In:", f"[{Theme.PRIMARY}]{result.destination_path}[/]")
+        table.add_row("Media Title:", f"[bold {Theme.TEXT_LIGHT}]{escape(result.title)}[/]")
+        table.add_row("Saved In:", f"[{Theme.PRIMARY}]{escape(result.destination_path)}[/]")
         table.add_row("Elapsed Time:", f"[{Theme.MUTED}]{elapsed_str}[/]")
 
         if result.is_playlist or (num_completed + num_skipped + num_failed > 1):
@@ -135,12 +136,12 @@ class CardRenderer:
         table.add_column("Value", style="white")
 
         table.add_row("Status:", f"[bold {Theme.DANGER}]✗ Download Failed[/]")
-        table.add_row("Media Title:", f"[bold {Theme.TEXT_LIGHT}]{result.title}[/]")
+        table.add_row("Media Title:", f"[bold {Theme.TEXT_LIGHT}]{escape(result.title)}[/]")
         if result.error_message:
             err_clean = result.error_message
             if len(err_clean) > 130:
                 err_clean = err_clean[:127] + "..."
-            table.add_row("Error Reason:", f"[{Theme.WARNING}]{err_clean}[/]")
+            table.add_row("Error Reason:", f"[{Theme.WARNING}]{escape(err_clean)}[/]")
         table.add_row("Elapsed Time:", f"[{Theme.MUTED}]{elapsed_str}[/]")
         table.add_row("Troubleshoot:", "[dim]Check logs in the menu or verify cookies if media is private/restricted.[/dim]")
 

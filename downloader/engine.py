@@ -20,7 +20,7 @@ from core.models import MediaInfo, DownloadResult
 from core.detector import PlatformDetector
 from core.sanitizer import Sanitizer
 from core.logger import AppLogger, YtDlpLogger
-from downloader.options import YdlOptionsBuilder
+from downloader.options import YdlOptionsBuilder, get_available_js_runtimes
 from downloader.disk import SmartDiskChecker
 from utils.notify import NotificationManager
 
@@ -33,13 +33,18 @@ class MediaDownloader:
 
     def fetch_media_info(self, url: str, cookies_from_browser: Optional[str] = None) -> Optional[MediaInfo]:
         platform = PlatformDetector.detect(url)
-        ydl_opts = {
+        ydl_opts: Dict[str, Any] = {
             "extract_flat": "in_playlist",
             "quiet": True,
             "no_warnings": True,
             "skip_download": True,
             "logger": YtDlpLogger(self.logger),
         }
+        js_runtimes = get_available_js_runtimes()
+        if js_runtimes:
+            ydl_opts["js_runtimes"] = js_runtimes
+            ydl_opts["remote_components"] = ["ejs:github"]
+
         if os.path.isfile(COOKIES_FILE):
             ydl_opts["cookiefile"] = COOKIES_FILE
             self.logger.info(f"Using local cookies.txt from: {COOKIES_FILE}")
@@ -126,10 +131,14 @@ class MediaDownloader:
                     pass
             elif "," in rng:
                 total_videos = len([p for p in rng.split(",") if p.strip()])
+            elif rng.isdigit():
+                total_videos = 1
         actual_destination_dir: Optional[str] = None
 
         def on_skip_callback(fname: str, fsize: str, fpath: str):
             nonlocal processed_count, actual_destination_dir
+            if fname in skipped_files:
+                return
             processed_count += 1
             skipped_files.append(fname)
             if fpath:
@@ -149,12 +158,14 @@ class MediaDownloader:
 
         def post_hook_callback(filepath: str):
             nonlocal stream_task_id, processed_count, actual_destination_dir
-            processed_count += 1
             fname = os.path.basename(filepath) if filepath else "Media"
-            fsize = Sanitizer.format_file_size(os.path.getsize(filepath)) if filepath and os.path.isfile(filepath) else "Completed"
-            completed_files.append(fname)
             if filepath:
                 actual_destination_dir = os.path.dirname(filepath)
+            if fname in completed_files:
+                return
+            processed_count += 1
+            fsize = Sanitizer.format_file_size(os.path.getsize(filepath)) if filepath and os.path.isfile(filepath) else "Completed"
+            completed_files.append(fname)
             self.logger.info(f"[COMPLETED] Download finished: '{fname}' | Size: {fsize} | Path: '{filepath}'")
 
             if stream_task_id is not None:
@@ -283,7 +294,7 @@ class MediaDownloader:
                 final_dir = save_path
 
         # Generate M3U playlist file for audio playlists (format 3: MP3, format 4: M4A)
-        if media.is_playlist and format_choice in (3, 4) and os.path.isdir(final_dir):
+        if media.is_playlist and format_choice in (3, 4) and final_dir and os.path.isdir(final_dir):
             try:
                 audio_files = sorted([
                     f for f in os.listdir(final_dir)

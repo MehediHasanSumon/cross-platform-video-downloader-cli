@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
+from rich.markup import escape
 from rich import box
 from core.config import VERSION, AUTHOR
 from ui.theme import Theme
@@ -62,7 +63,7 @@ class BannerRenderer:
         """Displays the URL entry prompt with optional clipboard link suggestion."""
         if clipboard_candidate:
             short_url = clipboard_candidate if len(clipboard_candidate) <= 65 else clipboard_candidate[:62] + "..."
-            console.print(f"  [{Theme.SUCCESS}]📋 Found link in clipboard:[/] [bold {Theme.TEXT_LIGHT}]{short_url}[/]")
+            console.print(f"  [{Theme.SUCCESS}]📋 Found link in clipboard:[/] [bold {Theme.TEXT_LIGHT}]{escape(short_url)}[/]")
             console.print(f"  [dim](Press Enter directly to use this link, or paste a new URL)[/dim]")
 
         console.print(f"[bold {Theme.PRIMARY}]Enter Media URL (YouTube, Facebook, Reels, Shorts, etc.):[/bold {Theme.PRIMARY}]")
