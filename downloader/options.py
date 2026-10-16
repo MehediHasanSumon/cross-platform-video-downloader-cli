@@ -5,13 +5,25 @@ import shutil
 from typing import Optional, List, Dict, Any
 from core.config import CONCURRENT_FRAGMENTS, SOCKET_BUFFER_SIZE
 from core.logger import AppLogger, YtDlpLogger
+from core.sanitizer import Sanitizer
 
 def get_available_js_runtimes() -> Dict[str, Dict[str, Any]]:
     """Detects available system JavaScript runtimes for yt-dlp challenge solving."""
     runtimes: Dict[str, Dict[str, Any]] = {}
     for rt in ("node", "deno", "bun", "quickjs"):
-        if shutil.which(rt):
-            runtimes[rt] = {}
+        path = shutil.which(rt)
+        if not path and rt == "node":
+            # Search user home nvm / local paths if not in current PATH
+            home = os.path.expanduser("~")
+            nvm_dir = os.path.join(home, ".nvm", "versions", "node")
+            if os.path.isdir(nvm_dir):
+                for v in sorted(os.listdir(nvm_dir), reverse=True):
+                    cand = os.path.join(nvm_dir, v, "bin", "node")
+                    if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                        path = cand
+                        break
+        if path:
+            runtimes[rt] = {"path": path}
     return runtimes
 
 class YdlOptionsBuilder:
@@ -35,17 +47,29 @@ class YdlOptionsBuilder:
         os.makedirs(save_path, exist_ok=True)
 
         if is_playlist:
-            # 1. Folder named after the playlist (using extracted playlist_title or metadata fallback)
-            clean_fallback = playlist_title.strip() if playlist_title else "Playlist"
-            folder_part = f"%(playlist_title,playlist|{clean_fallback}).100B"
+            # 1. Folder named after the playlist
+            clean_folder = None
+            if playlist_title:
+                clean_folder = Sanitizer.clean_media_title({"title": playlist_title}, "generic")
+
+            if clean_folder:
+                folder_path = os.path.join(save_path, clean_folder)
+                try:
+                    os.makedirs(folder_path, exist_ok=True)
+                except Exception:
+                    pass
+            else:
+                folder_path = os.path.join(save_path, "%(playlist_title,playlist|Playlist)s")
+
             # 2. Numbered serial prefix: 01. , 02. , 03. etc.
-            file_part = "%(playlist_index,playlist_autonumber&{:02d}. |)s%(title,id).100B.%(ext)s"
-            out_template = os.path.join(save_path, folder_part, file_part)
+            file_part = "%(playlist_index,playlist_autonumber,autonumber)02d. %(title,id).100B.%(ext)s"
+            out_template = os.path.join(folder_path, file_part)
         else:
             out_template = os.path.join(save_path, "%(title,id).100B.%(ext)s")
 
         ydl_opts: Dict[str, Any] = {
             "outtmpl": {"default": out_template},
+            "autonumber_start": 1,
             "windowsfilenames": True,
             "trim_file_name": 100,
             "ignoreerrors": True,

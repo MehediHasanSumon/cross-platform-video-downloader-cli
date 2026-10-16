@@ -10,9 +10,42 @@ AUTHOR = "Md Mehedi Hasan"
 
 # Base filesystem directories
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_DOWNLOAD_DIR = os.path.join(ROOT_DIR, "downloads")
+PATH_CONFIG_FILE = os.path.join(ROOT_DIR, "path.config")
 LOG_FILE = os.path.join(ROOT_DIR, "youtube_downloader.log")
 COOKIES_FILE = os.path.join(ROOT_DIR, "cookies.txt")
+
+def get_base_download_dir() -> str:
+    """Resolves base download directory from path.config if specified; defaults to ROOT_DIR/downloads."""
+    default_dir = os.path.join(ROOT_DIR, "downloads")
+    if not os.path.isfile(PATH_CONFIG_FILE):
+        return default_dir
+
+    try:
+        with open(PATH_CONFIG_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or line.startswith(";"):
+                    continue
+                # Support KEY=VALUE or KEY: VALUE format
+                if "=" in line:
+                    _, val = line.split("=", 1)
+                    line = val.strip()
+                elif ":" in line and not (len(line) > 2 and line[1] == ":" and line[2] in ("\\", "/")):
+                    _, val = line.split(":", 1)
+                    line = val.strip()
+
+                line = line.strip("\"'")
+                if line:
+                    expanded = os.path.expanduser(line)
+                    if not os.path.isabs(expanded):
+                        return os.path.abspath(os.path.join(ROOT_DIR, expanded))
+                    return os.path.abspath(expanded)
+    except Exception:
+        pass
+
+    return default_dir
+
+DEFAULT_DOWNLOAD_DIR = get_base_download_dir()
 
 # Network & Concurrency Optimization (Aggressive Multi-threaded Connection Flooding)
 CONCURRENT_FRAGMENTS = 8

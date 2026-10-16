@@ -67,4 +67,4 @@ class BannerRenderer:
             console.print(f"  [dim](Press Enter directly to use this link, or paste a new URL)[/dim]")
 
         console.print(f"[bold {Theme.PRIMARY}]Enter Media URL (YouTube, Facebook, Reels, Shorts, etc.):[/bold {Theme.PRIMARY}]")
-        console.print(f"[{Theme.MUTED}](Type 'q' to quit)[/{Theme.MUTED}]")
+        console.print(f"[{Theme.MUTED}](Type 'q' to quit, 'path' for destination folder, 'help' for options)[/{Theme.MUTED}]")

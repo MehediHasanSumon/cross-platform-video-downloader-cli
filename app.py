@@ -8,7 +8,9 @@ from rich.prompt import Prompt
 
 from core.config import (
     ROOT_DIR,
+    PATH_CONFIG_FILE,
     DEFAULT_DOWNLOAD_DIR,
+    get_base_download_dir,
     YOUTUBE_FORMAT_PROFILES,
     SOCIAL_FORMAT_PROFILES,
     COOKIES_FILE,
@@ -84,6 +86,12 @@ class MediaDownloaderApp:
                 view_recent_logs(self.console)
                 Prompt.ask("  Press Enter to return to main menu...")
                 continue
+            elif url_cmd in ("path", "folder", "dir"):
+                base_dir = get_base_download_dir()
+                self.console.print(f"\n  [bold {Theme.PRIMARY}]📁 Active Download Directory:[/bold {Theme.PRIMARY}] [bright_white]{base_dir}[/bright_white]")
+                self.console.print(f"  [dim]To customize this path, edit [cyan]{PATH_CONFIG_FILE}[/cyan] (default is local 'downloads/' folder).[/dim]\n")
+                Prompt.ask("  Press Enter to return to main menu...")
+                continue
             elif url_cmd in ("help", "?"):
                 ModalRenderer.show_help_modal(self.console)
                 Prompt.ask("  Press Enter to return to main menu...")
@@ -130,24 +138,30 @@ class MediaDownloaderApp:
 
         CardRenderer.render_media_card(self.console, media)
 
-        # Step 2: Handle playlist detection for YouTube
+        # Step 2: Handle playlist detection for YouTube and other platforms
         playlist_id = Sanitizer.extract_playlist_id(url)
-        if playlist_id and ("v=" in url or "youtu.be/" in url):
-            is_full_playlist, playlist_range = MenuRenderer.select_playlist_mode(self.console, media)
-            media.is_playlist = is_full_playlist
-            media.playlist_items_range = playlist_range
-            if is_full_playlist:
-                media.url = f"https://www.youtube.com/playlist?list={playlist_id}"
-                # Refresh media info for the full playlist to obtain accurate title & video count
-                playlist_info = self.downloader.fetch_media_info(media.url, cookies_from_browser=self.cookies_browser)
-                if playlist_info:
-                    media.title = playlist_info.title
-                    media.playlist_count = playlist_info.playlist_count
-                    media.duration = playlist_info.duration
-                    media.raw_info = playlist_info.raw_info
-            self.logger.info(f"Playlist mode selection: is_full_playlist={is_full_playlist}, range={playlist_range}")
+        if playlist_id:
+            if "v=" in url or "youtu.be/" in url:
+                is_full_playlist, playlist_range = MenuRenderer.select_playlist_mode(self.console, media)
+                media.is_playlist = is_full_playlist
+                media.playlist_items_range = playlist_range
+                if is_full_playlist:
+                    media.url = f"https://www.youtube.com/playlist?list={playlist_id}"
+                    # Refresh media info for the full playlist to obtain accurate title & video count
+                    playlist_info = self.downloader.fetch_media_info(media.url, cookies_from_browser=self.cookies_browser)
+                    if playlist_info:
+                        media.title = playlist_info.title
+                        media.playlist_count = playlist_info.playlist_count
+                        media.duration = playlist_info.duration
+                        media.raw_info = playlist_info.raw_info
+                self.logger.info(f"Playlist mode selection: is_full_playlist={is_full_playlist}, range={playlist_range}")
+            else:
+                # Direct playlist link (e.g. playlist?list=...)
+                media.is_playlist = True
+                playlist_range = MenuRenderer.prompt_playlist_range(self.console, media)
+                media.playlist_items_range = playlist_range
         elif media.is_playlist:
-            # Pure playlist link was provided
+            # Pure playlist detected from metadata
             playlist_range = MenuRenderer.prompt_playlist_range(self.console, media)
             media.playlist_items_range = playlist_range
 
@@ -163,7 +177,7 @@ class MediaDownloaderApp:
         chosen_profile = profiles[selected_format_idx]
 
         # Step 4: Storage destination
-        dest_folder = os.path.join(DEFAULT_DOWNLOAD_DIR, platform.folder)
+        dest_folder = os.path.join(get_base_download_dir(), platform.folder)
         os.makedirs(dest_folder, exist_ok=True)
 
         # Step 5: Pre-flight Summary Card

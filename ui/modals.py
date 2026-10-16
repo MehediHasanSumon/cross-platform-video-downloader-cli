@@ -6,7 +6,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 from rich import box
-from core.config import COOKIES_FILE
+from core.config import COOKIES_FILE, get_base_download_dir
 from ui.theme import Theme
 
 class ModalRenderer:
