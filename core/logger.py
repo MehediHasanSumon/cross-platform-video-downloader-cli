@@ -36,11 +36,15 @@ class AppLogger:
         return cls._instance
 
 
+import re
+from typing import List
+
 class YtDlpLogger:
     """Custom logger routing yt-dlp internal messages to the rotating file logger."""
 
     def __init__(self, logger: logging.Logger):
         self.logger = logger
+        self.errors: List[str] = []
 
     def debug(self, msg: str):
         if msg.startswith("[debug] "):
@@ -53,6 +57,9 @@ class YtDlpLogger:
         self.logger.warning(msg)
 
     def error(self, msg: str):
+        clean_msg = re.sub(r'\x1b\[[0-9;]*m', '', str(msg)).strip()
+        if clean_msg:
+            self.errors.append(clean_msg)
         self.logger.error(msg)
 
 

@@ -124,3 +124,33 @@ class CardRenderer:
         console.print()
         console.print(panel)
         console.print()
+
+    @staticmethod
+    def render_failure_card(console: Console, result: DownloadResult):
+        """Renders download failure summary when an error occurs."""
+        elapsed_str = Sanitizer.format_duration(result.elapsed_seconds)
+
+        table = Table.grid(padding=(0, 2))
+        table.add_column("Key", style=f"bold {Theme.DANGER}", justify="right", width=14)
+        table.add_column("Value", style="white")
+
+        table.add_row("Status:", f"[bold {Theme.DANGER}]✗ Download Failed[/]")
+        table.add_row("Media Title:", f"[bold {Theme.TEXT_LIGHT}]{result.title}[/]")
+        if result.error_message:
+            err_clean = result.error_message
+            if len(err_clean) > 130:
+                err_clean = err_clean[:127] + "..."
+            table.add_row("Error Reason:", f"[{Theme.WARNING}]{err_clean}[/]")
+        table.add_row("Elapsed Time:", f"[{Theme.MUTED}]{elapsed_str}[/]")
+        table.add_row("Troubleshoot:", "[dim]Check logs in the menu or verify cookies if media is private/restricted.[/dim]")
+
+        panel = Panel(
+            table,
+            title=f"[bold {Theme.DANGER}] ✗ Download Failed [/]",
+            border_style=Theme.DANGER,
+            box=box.ROUNDED,
+            padding=(1, 2),
+        )
+        console.print()
+        console.print(panel)
+        console.print()

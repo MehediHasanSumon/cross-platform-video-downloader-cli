@@ -21,22 +21,24 @@ class YdlOptionsBuilder:
         cookies_from_browser: Optional[str] = None,
         playlist_title: Optional[str] = None,
         playlist_items: Optional[str] = None,
+        custom_logger: Optional[Any] = None,
     ) -> Dict[str, Any]:
         os.makedirs(save_path, exist_ok=True)
 
         if is_playlist:
             # 1. Folder named after the playlist (using extracted playlist_title or metadata fallback)
             clean_fallback = playlist_title.strip() if playlist_title else "Playlist"
-            folder_part = f"%(playlist_title,playlist|{clean_fallback})s"
+            folder_part = f"%(playlist_title,playlist|{clean_fallback}).100B"
             # 2. Numbered serial prefix: 01. , 02. , 03. etc.
-            file_part = "%(playlist_index,playlist_autonumber&{:02d}. |)s%(title,id)s.%(ext)s"
+            file_part = "%(playlist_index,playlist_autonumber&{:02d}. |)s%(title,id).100B.%(ext)s"
             out_template = os.path.join(save_path, folder_part, file_part)
         else:
-            out_template = os.path.join(save_path, "%(title,id)s.%(ext)s")
+            out_template = os.path.join(save_path, "%(title,id).100B.%(ext)s")
 
         ydl_opts: Dict[str, Any] = {
             "outtmpl": {"default": out_template},
             "windowsfilenames": True,
+            "trim_file_name": 100,
             "ignoreerrors": True,
             "retries": 15,
             "fragment_retries": 15,
@@ -48,7 +50,7 @@ class YdlOptionsBuilder:
             "continuedl": True,
             "nooverwrites": True,
             "noplaylist": not is_playlist,
-            "logger": YtDlpLogger(AppLogger.get_logger()),
+            "logger": custom_logger or YtDlpLogger(AppLogger.get_logger()),
             "noprogress": True,
             "quiet": True,
             "no_warnings": True,

@@ -182,24 +182,28 @@ class MediaDownloaderApp:
             cookies_from_browser=self.cookies_browser,
         )
 
-        # Step 7: Success Dashboard
-        CardRenderer.render_success_card(self.console, result)
+        # Step 7: Download Result Dashboard
+        if result.success:
+            CardRenderer.render_success_card(self.console, result)
+        else:
+            CardRenderer.render_failure_card(self.console, result)
 
         # Step 8: Interactive Post-Download Action Menu with hotkeys
         target_dir = result.destination_path or dest_folder
         playable_file = None
-        candidate_files = result.completed_files + result.skipped_files
-        for cand in candidate_files:
-            cand_path = os.path.join(target_dir, cand)
-            if os.path.isfile(cand_path):
-                playable_file = cand_path
-                break
-
-        if not playable_file and os.path.isdir(target_dir):
-            for f in sorted(os.listdir(target_dir)):
-                if any(f.endswith(ext) for ext in (".mp4", ".mkv", ".webm", ".mp3", ".m4a")):
-                    playable_file = os.path.join(target_dir, f)
+        if result.success:
+            candidate_files = result.completed_files + result.skipped_files
+            for cand in candidate_files:
+                cand_path = os.path.join(target_dir, cand)
+                if os.path.isfile(cand_path):
+                    playable_file = cand_path
                     break
+
+            if not playable_file and os.path.isdir(target_dir):
+                for f in sorted(os.listdir(target_dir)):
+                    if any(f.endswith(ext) for ext in (".mp4", ".mkv", ".webm", ".mp3", ".m4a")):
+                        playable_file = os.path.join(target_dir, f)
+                        break
 
         while True:
             action_idx = MenuRenderer.interactive_post_download_menu(self.console, default_index=0)
@@ -211,7 +215,7 @@ class MediaDownloaderApp:
                 if playable_file and os.path.isfile(playable_file):
                     SystemUtils.play_media(playable_file)
                 else:
-                    SystemUtils.open_folder(target_dir)
+                    self.console.print("\n  [bold yellow]No newly downloaded media found to play.[/bold yellow]\n")
             elif action_idx == 3:  # View logs
                 view_recent_logs(self.console)
                 Prompt.ask("  Press Enter to return...")

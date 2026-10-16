@@ -220,6 +220,7 @@ class MediaDownloader:
                 if stream_task_id is not None:
                     progress.update(stream_task_id, description="[bold #4bdd7f]✓ Lossless merge completed[/bold #4bdd7f]")
 
+        dl_logger = YtDlpLogger(self.logger)
         ydl_opts = YdlOptionsBuilder.build(
             save_path=save_path,
             format_choice=format_choice,
@@ -232,8 +233,10 @@ class MediaDownloader:
             cookies_from_browser=cookies_from_browser,
             playlist_title=media.title if media.is_playlist else None,
             playlist_items=media.playlist_items_range if media.is_playlist else None,
+            custom_logger=dl_logger,
         )
 
+        download_ret = None
         with progress:
             if media.is_playlist and total_videos and total_videos > 1:
                 playlist_task_id = progress.add_task(
@@ -249,11 +252,26 @@ class MediaDownloader:
                     on_skip=on_skip_callback,
                 )
                 try:
-                    ydl.download([media.url])
+                    download_ret = ydl.download([media.url])
                 except Exception as dl_err:
                     self.logger.warning(f"Download execution encountered warning/error: {dl_err}")
+                    if str(dl_err) not in dl_logger.errors:
+                        dl_logger.errors.append(str(dl_err))
 
         elapsed_sec = int(time.time() - start_time)
+
+        # Check whether download succeeded or failed
+        is_success = bool(completed_files or skipped_files)
+        error_msg = None
+        if not is_success:
+            if dl_logger.errors:
+                error_msg = dl_logger.errors[-1]
+            elif download_ret is not None and download_ret != 0:
+                error_msg = f"Download failed with exit code {download_ret}"
+            else:
+                error_msg = "No media files were downloaded. The video stream may be unavailable or restricted."
+            failed_files.append(media.title)
+            self.logger.error(f"[FAILED] Download failed for '{media.title}': {error_msg}")
 
         # Determine target final directory for playlist
         final_dir = actual_destination_dir
@@ -281,11 +299,17 @@ class MediaDownloader:
             except Exception as m3u_err:
                 self.logger.warning(f"Could not write M3U playlist: {m3u_err}")
 
-        # Trigger desktop system notification upon completion
-        NotificationManager.notify(
-            title="Download Completed",
-            message=f"{media.title} ({len(completed_files)} new, {len(skipped_files)} skipped)",
-        )
+        # Trigger desktop system notification
+        if is_success:
+            NotificationManager.notify(
+                title="Download Completed",
+                message=f"{media.title} ({len(completed_files)} new, {len(skipped_files)} skipped)",
+            )
+        else:
+            NotificationManager.notify(
+                title="Download Failed",
+                message=f"{media.title}: {error_msg or 'Download could not be completed'}",
+            )
 
         return DownloadResult(
             title=media.title,
@@ -295,5 +319,6 @@ class MediaDownloader:
             completed_files=completed_files,
             skipped_files=skipped_files,
             failed_files=failed_files,
-            success=True,
+            success=is_success,
+            error_message=error_msg,
         )

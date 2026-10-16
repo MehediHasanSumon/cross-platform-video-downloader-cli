@@ -99,8 +99,9 @@ class Sanitizer:
         # Strip dangerous filename characters for Linux / Windows / macOS
         cleaned = "".join(c for c in title if c not in r'\/:*?"<>|' and ord(c) >= 32).strip()
 
-        # Enforce cross-platform safe filename length
-        if len(cleaned.encode("utf-8", errors="ignore")) > 180:
-            cleaned = cleaned[:140] + "..."
+        # Enforce cross-platform safe filename length (max 100 bytes in UTF-8)
+        encoded = cleaned.encode("utf-8", errors="ignore")
+        if len(encoded) > 100:
+            cleaned = encoded[:100].decode("utf-8", errors="ignore").rstrip() + "..."
 
         return cleaned or "Media_Download"
