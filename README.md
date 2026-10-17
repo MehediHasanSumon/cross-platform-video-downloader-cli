@@ -313,10 +313,3 @@ Press `Ctrl + C` at any time. The application cleanly aborts the download, resto
 - [Rich](https://github.com/Textualize/rich) — Terminal rendering engine for tables, live progress bars, and modal panels.
 - [FFmpeg](https://ffmpeg.org/) — Industry-standard multimedia framework for lossless stream merging and audio transcoding.
 
----
-
-## 👤 Author & Maintainer
-
-- **Developer**: Md Mehedi Hasan
-- **Project**: Universal Media Downloader Pro
-- **Version**: 3.6
