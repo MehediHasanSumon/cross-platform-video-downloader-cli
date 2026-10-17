@@ -1,119 +1,322 @@
-# Universal Media Downloader Pro (YouTube, Facebook & Social TUI)
+# Universal Media Downloader Pro
 
-A state-of-the-art, interactive command-line media and video downloader with automated dependency setup, multi-platform auto-detection, real-time metadata preview, lossless FFmpeg merging, and an ultra-modern Terminal User Interface (TUI).
+[![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![yt-dlp](https://img.shields.io/badge/Engine-yt--dlp-red?style=for-the-badge)](https://github.com/yt-dlp/yt-dlp)
+[![FFmpeg](https://img.shields.io/badge/FFmpeg-Lossless%20Merge-007808?style=for-the-badge&logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
+[![Rich](https://img.shields.io/badge/UI-Rich%20TUI-brightgreen?style=for-the-badge)](https://github.com/Textualize/rich)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-blue?style=for-the-badge)](https://github.com/)
 
-Supports:
-- **YouTube** (Videos, Shorts, Playlists up to 8K, 4K, 1440p, 1080p60)
-- **Facebook** (Reels, Watch, Page Videos, HD & SD downloads)
-- **Instagram** (Reels, Videos)
-- **TikTok**, **Twitter / X**, and **1,800+ other web media sites**
-- **Studio-Quality Audio Extraction** (320kbps MP3 & Original M4A/AAC)
-
-Works seamlessly on **Linux (Ubuntu / Debian / Mint / Arch / Fedora)**, **Windows (10 / 11)**, and **macOS (Apple Silicon & Intel)**.
+A state-of-the-art, high-performance command-line media downloader featuring an ultra-modern Terminal User Interface (TUI), automatic static FFmpeg installation (no root/sudo needed), multi-platform URL auto-detection, clipboard sniffing, smart disk deduplication, multi-fragment accelerated streaming, and lossless audio/video merging.
 
 ---
 
-## 🚀 How to Run
+## 🌟 Key Features
 
-### 🐧 Linux (Ubuntu / Debian / Mint)
+### 🌐 Multi-Platform Auto-Detection
+Paste any URL and the engine automatically identifies the platform and applies tailored format profiles and branding badges:
+- **YouTube**: Videos, Shorts, Channels, and full Playlists up to 8K, 4K, 1440p, 1080p60.
+- **Facebook**: Public/Private Videos, Reels, and Watch streams in HD & SD.
+- **Instagram**: Reels, Posts, and IGTV.
+- **TikTok**: High-definition video streams without watermarks.
+- **Twitter / X**: Video clips and GIF loops.
+- **1,800+ Web Media Sites**: Seamlessly supported via the underlying yt-dlp core.
 
-1. Open your terminal in this project folder:
+### ⚡ Aggressive Bandwidth & Acceleration
+- **Multi-Threaded Fragment Flooding**: Downloads up to 8 concurrent chunks per stream simultaneously (`CONCURRENT_FRAGMENTS = 8`).
+- **Optimized Socket Buffer**: 64 KB socket buffer for maximized packet throughput and zero bandwidth throttling.
+- **JavaScript Engine Auto-Integration**: Auto-detects Node.js, Deno, Bun, or QuickJS on your system to execute YouTube JavaScript signature solvers without throttling.
+
+### 🎛️ Dynamic Format & Quality Profiles
+- **YouTube Profiles**:
+  - `8K / 4K / 1080p60`: Maximum quality video stream merged losslessly with high-bitrate audio via FFmpeg.
+  - `1080p Crisp`: Full HD 1080p MP4 optimized for compatibility across all players and devices.
+  - `720p Fast`: Compact MP4 file size for quick downloads and mobile playback.
+  - `320 kbps MP3`: Studio-grade high-fidelity MP3 extraction.
+  - `Best M4A / AAC`: Untouched original source audio container.
+- **Social Media Profiles (Facebook / Instagram / TikTok / Twitter)**:
+  - `Best Available (HD)`: Highest resolution MP4 available.
+  - `HD Crisp (1080p / 720p)`: Balanced high-definition MP4.
+  - `SD Compact (480p)`: Lightweight definition for quick sharing.
+  - `320 kbps MP3` & `Source M4A`: High-quality audio extraction.
+
+### 🧠 Smart Facebook Title Fallback & Filename Sanitizer
+- Facebook videos often lack formal title tags (e.g. `Facebook video #1029384756`). The engine intelligently falls back to the author name and post caption line to construct clean, meaningful filenames.
+- Sanitizes illegal filesystem characters across Windows (`\/:*?"<>|`), Linux, and macOS, while enforcing a safe 100-byte length boundary to prevent OS path truncation.
+
+### 💾 Smart Disk Pre-Check & Auto-Resume
+- Before initiating any network stream, the disk filter inspects the destination directory. Existing completed files (>1 KB) are skipped immediately.
+- Incomplete downloads (`.part` or `.ytdl`) are detected and resumed automatically from the exact byte where they stopped.
+
+### 📋 Clipboard Auto-Detection
+- Upon opening the application or returning to the prompt, the app scans the system clipboard:
+  - **Linux**: Wayland (`wl-paste`), X11 (`xclip`, `xsel`).
+  - **macOS**: `pbpaste`.
+  - **Windows & Cross-Platform**: `pyperclip` / Tkinter native hooks.
+- If a valid media URL is detected, simply press **Enter** to start processing it immediately without pasting manually.
+
+### 📑 Playlists & Dual-Tracking Progress
+- **Intelligent Recognition**: Automatically differentiates between individual videos and playlist URLs.
+- **Range Support**: Download full playlists, specific ranges (e.g. `1-10`), or specific indices (e.g. `1,3,7`).
+- **Serial File Ordering**: Files are organized with clean two-digit index prefixes: `01. Title.mp4`, `02. Title.mp4`, etc.
+- **M3U Playlist Generation**: When downloading audio playlists (MP3 / M4A), an `.m3u` playlist index file is automatically written to the folder for immediate music player playback.
+- **Dual Live Bars**: Displays an overall playlist progress bar alongside the active video stream download bar.
+
+### 🔔 Native Desktop Notifications
+- Automatically sends native OS desktop alerts upon download completion or errors:
+  - **Linux**: Native `notify-send`.
+  - **macOS**: AppleScript `osascript` notifications.
+  - **Windows**: PowerShell toast / balloon notifications.
+
+### 📁 Custom Download Directory (`path.config`)
+- Automatically sorts files into platform subfolders: `downloads/YouTube/`, `downloads/Facebook/`, etc.
+- Easily override the default base path by creating or editing `path.config`.
+
+### 🍪 Private / Restricted Content Authentication
+- Place an exported `cookies.txt` file in the project directory to effortlessly download private Facebook groups, friends-only posts, follower-restricted Instagram reels, or age-restricted YouTube videos.
+
+### 🛠️ Automatic Static FFmpeg Downloader
+- `setup_ffmpeg.py` automatically detects missing FFmpeg binaries and fetches standalone static builds directly from official mirrors (yt-dlp builds / John Van Sickle builds / Gyan.dev) for Linux (x86_64 / arm64) and Windows without requiring administrator/root privileges.
+
+---
+
+## 📂 Project Architecture
+
+```
+cross-platform-video-downloader-cli/
+│
+├── main.py                 # Application bootstrap & Windows UTF-8 / ANSI initialization
+├── app.py                  # Core application controller and main event loop
+├── setup_ffmpeg.py         # Standalone static FFmpeg downloader and PATH configurator
+├── run.sh                  # Automated zero-config launcher for Linux & macOS
+├── run.bat                 # Automated zero-config launcher for Windows (UTF-8 enabled)
+├── requirements.txt        # Python package dependencies (yt-dlp, rich)
+├── path.config             # Custom download directory configuration
+├── cookies.txt             # (Optional) Exported cookies for private media authentication
+├── youtube_downloader.log  # Rotating diagnostic application logs
+│
+├── core/
+│   ├── config.py           # Constants, bitrate sizing factors, and profile presets
+│   ├── detector.py         # Multi-platform domain matching and badge resolution
+│   ├── models.py           # Dataclasses (MediaInfo, Platform, FormatOption, DownloadResult)
+│   ├── sanitizer.py        # Filename sanitization, time formatting, and Facebook caption parser
+│   └── logger.py           # Rotating file logger and rich terminal log viewer
+│
+├── downloader/
+│   ├── engine.py           # High-level downloader orchestrator and Rich progress hooks
+│   ├── options.py          # yt-dlp parameter builder and JS engine challenge finder
+│   └── disk.py             # SmartDiskChecker for file deduplication and resume handling
+│
+├── ui/
+│   ├── theme.py            # TrueColor pastel palette and title gradient styles
+│   ├── banner.py           # Hero banner, platform ribbons, and input prompt
+│   ├── cards.py            # Media metadata, preflight summary, and completion cards
+│   ├── menus.py            # Interactive format picker and post-download action menus
+│   └── modals.py           # Help modal, cookies setup guide, and goodbye screen
+│
+└── utils/
+    ├── clipboard.py        # Cross-platform safe clipboard inspector (Wayland/X11/macOS/Win)
+    ├── notify.py           # Native desktop notification dispatcher
+    ├── system.py           # Folder opener, media player launcher, and FFmpeg check
+    └── terminal.py         # Terminal screen clearer, cursor manager, and raw key reader
+```
+
+---
+
+## 🚀 Quick Start & Installation
+
+### 🐧 Linux (Ubuntu, Debian, Linux Mint, Arch, Fedora)
+
+1. Clone or navigate to the project directory:
    ```bash
-   cd /path/to/youtube-downloader
+   cd /path/to/cross-platform-video-downloader-cli
    ```
 
-2. Make `run.sh` executable (if not already):
+2. Make `run.sh` executable:
    ```bash
    chmod +x run.sh
    ```
 
-3. Launch the downloader:
+3. Launch the application:
    ```bash
    ./run.sh
    ```
 
 > [!NOTE]
-> The launcher (`./run.sh`) automatically:
-> - Verifies Python 3 is installed.
+> The automated `./run.sh` launcher handles everything for you:
+> - Validates Python 3.
 > - Creates and activates a virtual environment (`venv`).
-> - Installs `yt-dlp` and `rich` from `requirements.txt`.
-> - Checks for FFmpeg (and automatically downloads a standalone static Linux build if missing — **no root/sudo password required!**).
-> - Launches `main.py`.
+> - Installs and updates `yt-dlp` and `rich`.
+> - Checks for FFmpeg, downloading a standalone static binary if missing (no root/sudo password required).
+> - Clears the terminal and boots the user interface.
 
 ---
 
-### 🪟 Windows
+### 🪟 Windows (10 / 11)
 
-1. Double-click `run.bat` or run in CMD / PowerShell:
+1. Navigate to the project folder.
+2. Double-click `run.bat` or run it from Command Prompt / PowerShell:
    ```cmd
    run.bat
    ```
 
+> [!TIP]
+> `run.bat` automatically configures Windows console code page to UTF-8 (`chcp 65001`) and enables Virtual Terminal Processing to render colors, badges, and progress bars smoothly.
+
 ---
 
-### 🍎 macOS (Apple Silicon & Intel)
+### 🍎 macOS (Apple Silicon M-series & Intel)
 
-1. Open Terminal in the project folder:
+1. Open Terminal and navigate to the project folder:
+   ```bash
+   cd /path/to/cross-platform-video-downloader-cli
+   ```
+
+2. Run the launcher:
    ```bash
    chmod +x run.sh
    ./run.sh
    ```
-> [!TIP]
-> Compatible with both Apple Silicon (M1/M2/M3/M4) and Intel Macs. FFmpeg will be configured automatically or you can install it via `brew install ffmpeg`.
+
+> [!NOTE]
+> If FFmpeg is missing, `run.sh` will install it via Homebrew (`brew install ffmpeg`) or configure a static release automatically.
 
 ---
 
-## 💎 Next-Level UI/UX Features
+### 🐍 Manual Python Execution (Any OS)
 
-- **🌐 Multi-Platform Auto-Detection**: Paste any link (YouTube, Facebook, Instagram, TikTok, Twitter/X) — the engine instantly detects the platform and displays dynamic branding badges.
-- **⚡ Adaptive Format Profiles**: Tailored format choices based on detected platform:
-  - *YouTube*: 8K / 4K / 1440p / 1080p60 / 720p / MP3 / M4A.
-  - *Facebook & Social*: Best Available HD / 1080p / SD 480p / MP3 320kbps / M4A.
-- **🏷️ Smart Facebook Title & Filename Fallback**: Resolves generic titles (`Facebook video #123456`) into readable file names using post captions and creator names.
-- **📁 Smart Platform Organization**: Automatically sorts media into `downloads/Facebook/`, `downloads/YouTube/`, `downloads/Instagram/`, etc. (or use your custom folder).
-- **🍪 Private / Restricted Media Support (Cookies)**: Place your `cookies.txt` in the project root to download private group videos, friend-only posts, or restricted reels.
-- **Visual Hero Header & Status Badges**: Clean, branded dashboard displaying engine, FFmpeg, cookies, and OS status.
-- **Instant Media Information Card**: Fetches video metadata with a live spinner and displays title, channel/artist, duration, view count, and content type before downloading.
-- **Interactive Keyboard Navigation**: Smoothly navigate format options using keyboard arrow keys (`↑` / `↓`) and `Enter`, or press number keys (`1`–`5`) directly.
-- **Maximum Quality**: Downloads the best video stream and best audio stream, then losslessly merges them into MP4 via FFmpeg.
-- **Smart Disk Check & Auto-Resume**: Checks your destination folder directly before downloading. Files already on disk are skipped automatically. Incomplete downloads (`.part`) automatically resume from where they stopped.
-- **Live Real-Time Rich Progress Engine**: Real-time progress bar tracking stream download, percentage, MB downloaded / total, speed in MB/s, and ETA. Separate status indicators for video download, audio download, and FFmpeg stream merging.
-- **Playlist Dual-Tracking**: Shows overall playlist progress alongside the active video's download progress.
-- **Completed Items Dashboard**: Displays real-time `✓ Completed` notifications for each video along with a structured summary table showing download status and file size.
-- **Dedicated Log File (`youtube_downloader.log`)**: Automatically logs all downloads, skips, errors, and yt-dlp diagnostic messages. You can inspect logs directly from the interactive post-download menu.
-- **Post-Download Action Dashboard**: Upon completion, view the download summary with an option to open the downloads folder directly in your system file manager (`xdg-open` on Linux, `File Explorer` on Windows).
+If you prefer to manage your environment manually:
+
+```bash
+# 1. Create a virtual environment
+python3 -m venv venv
+
+# 2. Activate the virtual environment
+# Linux / macOS:
+source venv/bin/activate
+# Windows:
+venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Run the application
+python main.py
+```
 
 ---
 
-## 🇧🇩 বাংলা নির্দেশিকা (Quick Guide in Bengali)
+## ⌨️ Interactive Navigation & In-App Commands
 
-### 🐧 লিনাক্স (Ubuntu / Debian / Mint / Arch):
-টার্মিনালে প্রজেক্ট ফোল্ডারে গিয়ে রান করুন:
-```bash
-chmod +x run.sh
-./run.sh
+### Main Input Commands
+When prompted for a media URL, you can enter any of the following special commands:
+
+| Command | Shortcut | Description |
+| :--- | :---: | :--- |
+| `q` | `quit`, `exit` | Safely close the application. |
+| `path` | `folder`, `dir` | Display the currently configured base download folder. |
+| `cookies` | `cookie`, `auth` | Open the Cookie Authentication Guide & check `cookies.txt` status. |
+| `logs` | `log` | Inspect the latest entries from `youtube_downloader.log` in terminal. |
+| `help` | `?` | Open the help modal and keyboard shortcut cheat sheet. |
+| `clear` | `cls` | Clear the screen and refresh the hero dashboard. |
+
+### Quality Selection Controls
+Once metadata is loaded, select your preferred format using either:
+- **Arrow Keys**: Press `↑` (Up) or `↓` (Down) to browse options, then press `Enter` or `Space` to confirm.
+- **Vim Keys**: Press `k` (Up) or `j` (Down).
+- **WASD Keys**: Press `w` (Up) or `s` (Down).
+- **Direct Numbers**: Press `1`, `2`, `3`, `4`, or `5` to immediately choose the corresponding format.
+
+### Post-Download Action Menu
+After a download finishes, choose from interactive actions:
+1. `Download another media / playlist` — Return to main prompt.
+2. `Open download folder in file manager` — Launches `xdg-open` (Linux), `File Explorer` (Windows), or `open` (macOS).
+3. `Play downloaded media in default player` — Opens the downloaded video/audio in VLC, MPV, or default OS player.
+4. `View recent download logs` — Check yt-dlp diagnostic outputs.
+5. `Exit` — Clean exit.
+
+---
+
+## ⚙️ Configuration
+
+### Custom Destination Path (`path.config`)
+By default, media is saved into the project's `downloads/` directory. You can set a custom destination (such as your system Videos folder or an external drive) by editing `path.config` in the root folder:
+
+```ini
+# Specify absolute or relative path:
+PATH="/home/sumon/Videos"
 ```
-`run.sh` স্বয়ংক্রিয়ভাবে Python ভার্চুয়াল এনভায়রনমেন্ট তৈরি করবে, `yt-dlp` ও `rich` ইন্সটল করবে এবং FFmpeg না থাকলে স্বয়ংক্রিয়ভাবে ডাউনলোড ও কনফিগার করে নেবে (কোনো root/sudo পাসওয়ার্ড লাগবে না)। চেক শেষ হওয়ার পর টার্মিনাল স্বয়ংক্রিয়ভাবে ক্লিয়ার হয়ে ফ্রেশ ইন্টারফেস ওপেন হবে।
-
-### 🪟 উইন্ডোজ (Windows 10 / 11):
-সরাসরি `run.bat` ফাইলে ডাবল ক্লিক করুন অথবা CMD / PowerShell থেকে চালান:
-```cmd
-run.bat
+Or simply:
+```text
+/home/sumon/Videos
 ```
-উইন্ডোজে বাংলা লেখা এবং আধুনিক কালার ইন্টারফেস ঠিক রাখার জন্য এতে স্বয়ংক্রিয় UTF-8 (Code Page 65001) মোড এনাবল করা আছে।
-
-### 🍎 ম্যাক (macOS Apple Silicon & Intel):
-ম্যাক টার্মিনালে রান করুন:
-```bash
-chmod +x run.sh
-./run.sh
+Windows example:
+```ini
+PATH="D:\Media\Downloads"
 ```
-M1/M2/M3/M4 বা Intel যে কোনো ম্যাকের জন্যই এটি স্বয়ংক্রিয়ভাবে পরিবেশ প্রস্তুত করে নেবে।
 
-### নতুন নেক্সট-লেভেল ফিচারসমূহ:
-1. **ফেসবুক ও মাল্টি-প্ল্যাটফর্ম সাপোর্ট**: Facebook (Reels, Watch, Video), YouTube, Instagram, TikTok যেকোনো লিঙ্ক দিলেই স্বয়ংক্রিয়ভাবে ডিটেক্ট করে ডাউনলোড করা যাবে।
-2. **স্মার্ট ফেসবুক টাইটেল**: ফেসবুক ভিডিওর টাইটেল মিসিং বা কেবল আইডি নাম্বার হলে, পোস্টের ক্যাপশন ও পেজের নাম ব্যবহার করে সুন্দর ও বোধগম্য ফাইল তৈরি করে।
-3. **ডাইনামিক কোয়ালিটি মেনু**: ফেসবুকের জন্য সরাসরি HD ও SD কোয়ালিটি এবং ইউটিউবের জন্য 8K/4K/1080p অপশন ডাইনামিকভাবে আসবে। অ্যারো কি (`↑`/`↓`) দিয়ে সহজেই সিলেক্ট করা যাবে।
-4. **অটো প্ল্যাটফর্ম ফোল্ডার**: ডাউনলোড করা ফাইলগুলো স্বয়ংক্রিয়ভাবে প্ল্যাটফর্ম অনুযায়ী সাজানো থাকবে (`downloads/Facebook/`, `downloads/YouTube/`)।
-5. **প্রাইভেট ভিডিও ও কুকিজ সাপোর্ট**: ফেসবুক প্রাইভেট গ্রুপ বা বন্ধুদের পোস্টের ভিডিও ডাউনলোডের জন্য প্রোজেক্ট ফোল্ডারে `cookies.txt` রাখলেই অ্যাপটি স্বয়ংক্রিয়ভাবে তা ব্যবহার করবে।
-6. **রিয়েলটাইম প্রগ্রেস ও অটো-রিজিউম**: ডাউনলোড স্পিড, ETA এবং ডিস্কে আগে থেকে ফাইল থাকলে অটো-স্কিপ ও অসম্পূর্ণ থাকলে সেখান থেকেই রিজুউম করার সুবিধা।
+The application automatically creates organized platform subfolders within your target path:
+```
+/home/sumon/Videos/
+├── YouTube/
+├── Facebook/
+├── Instagram/
+├── TikTok/
+├── Twitter/
+└── WebMedia/
+```
+
+---
+
+### Cookie Authentication (`cookies.txt`)
+Some videos require user authentication (e.g., Facebook private group videos, Instagram follower-only reels, or age-restricted YouTube videos).
+
+#### How to Set Up Cookies in 2 Minutes:
+1. Install a browser extension such as **"Get cookies.txt LOCALLY"** (available for Chrome, Brave, Firefox, Edge).
+2. Visit the website (e.g. `facebook.com` or `youtube.com`) while logged into your account.
+3. Click the extension icon and export your cookies as Netscape format.
+4. Save the file as **`cookies.txt`** directly in the root directory of this project:
+   ```
+   cross-platform-video-downloader-cli/cookies.txt
+   ```
+5. Type `cookies` inside the app anytime to verify that the file is loaded and active.
+
+---
+
+## 🔧 Troubleshooting & FAQ
+
+### 1. `[ERROR] Required packages are missing!`
+Run `./run.sh` (Linux/macOS) or `run.bat` (Windows). The launchers automatically create a virtual environment and run `pip install -r requirements.txt`.
+
+### 2. FFmpeg not found or stream merging disabled
+- If running manually without `run.sh`/`run.bat`, execute:
+  ```bash
+  python setup_ffmpeg.py
+  ```
+- Alternatively, install FFmpeg system-wide:
+  - **Ubuntu / Debian**: `sudo apt install ffmpeg`
+  - **Arch Linux**: `sudo pacman -S ffmpeg`
+  - **macOS**: `brew install ffmpeg`
+  - **Windows**: `winget install Gyan.FFmpeg` or download from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/).
+
+### 3. "Sign in to confirm you're not a bot" or "Private Video"
+- Export your browser cookies using the Netscape format and place `cookies.txt` in the root directory.
+- Ensure you have Node.js or Bun installed; the downloader will automatically detect it to solve YouTube player JavaScript challenges.
+
+### 4. How to cancel an in-progress download?
+Press `Ctrl + C` at any time. The application cleanly aborts the download, restores your terminal cursor, and preserves any `.part` files so they can be resumed later.
+
+---
+
+## 📜 Dependencies & Credits
+
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — The engine powering high-speed video/audio extraction.
+- [Rich](https://github.com/Textualize/rich) — Terminal rendering engine for tables, live progress bars, and modal panels.
+- [FFmpeg](https://ffmpeg.org/) — Industry-standard multimedia framework for lossless stream merging and audio transcoding.
+
+---
+
+## 👤 Author & Maintainer
+
+- **Developer**: Md Mehedi Hasan
+- **Project**: Universal Media Downloader Pro
+- **Version**: 3.6
